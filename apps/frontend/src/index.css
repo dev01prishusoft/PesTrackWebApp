@@ -1,0 +1,698 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Reset and basic setup to match legacy exactly */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #f0f0f0;
+  overflow: hidden;
+}
+
+/* ── Legacy Header Styles ── */
+#hdr {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: #fff;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  z-index: 3000;
+  box-shadow: 0 1px 6px rgba(0,0,0,.1);
+}
+#hdr-logo {
+  height: 52px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.vdiv {
+  width: 1px;
+  height: 38px;
+  background: #E2E8F0;
+  flex-shrink: 0;
+}
+#hdr-sub {
+  font-size: .78rem;
+  color: #64748B;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 2px;
+}
+.hdr-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1.5px solid #CBD5E1;
+  background: #fff;
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.hbtn:hover {
+  background: #F8FAFC;
+  border-color: #94A3B8;
+}
+.hbtn.on {
+  background: #1C2333;
+  color: #fff;
+  border-color: #1C2333;
+}
+.hbtn.blue {
+  background: #2563EB;
+  color: #fff;
+  border-color: #2563EB;
+}
+.hbtn.blue:hover {
+  background: #1d4ed8;
+}
+.hbtn.grn {
+  background: #2D8A4E;
+  color: #fff;
+  border-color: #2D8A4E;
+}
+.hbtn.grn:hover {
+  background: #1e6b39;
+}
+
+/* Action cluster: single inline row on desktop (never wraps). */
+.hdr-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Hamburger toggle: hidden on desktop, shown on mobile. */
+.hdr-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+}
+.hdr-drawer-overlay {
+  display: none;
+}
+
+/* ── Responsive ──
+   Below 1100px the action buttons collapse into a hamburger drawer so the
+   top bar always stays a single tidy row (logo · site · burger · logout)
+   and the buttons never wrap inside the fixed-height bar. */
+@media (max-width: 1100px) {
+  .hdr-actions {
+    display: none;
+  }
+  .hdr-burger {
+    display: inline-flex;
+  }
+  .hdr-divider {
+    display: none;
+  }
+  /* Slide-down drawer anchored under the fixed 64px header. */
+  .hdr-drawer {
+    position: fixed;
+    top: 64px;
+    right: 8px;
+    left: 8px;
+    max-height: calc(100vh - 76px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    padding: 10px;
+    z-index: 3500;
+  }
+  .hdr-drawer .hbtn {
+    width: 100%;
+    text-align: center;
+    padding: 10px 14px;
+    font-size: .82rem;
+  }
+  .hdr-drawer-overlay {
+    display: block;
+    position: fixed;
+    inset: 64px 0 0 0;
+    background: rgba(0, 0, 0, 0.25);
+    z-index: 3400;
+  }
+}
+
+/* On very small screens, reclaim space: shrink logo, hide the subtitle. */
+@media (max-width: 560px) {
+  #hdr {
+    padding: 0 10px;
+    gap: 8px;
+  }
+  #hdr-logo {
+    height: 40px;
+  }
+  #hdr-sub,
+  .vdiv {
+    display: none;
+  }
+  /* Keep the site selector from pushing the burger/logout off-screen. */
+  #hdr select {
+    max-width: 40vw;
+  }
+}
+
+/* ── Map ── */
+#map {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+}
+.cz-divicon, .cz-divicon div, .cz-divicon img {
+  width: 60px !important;
+  height: 50px !important;
+  max-width: 60px !important;
+  max-height: 50px !important;
+}
+
+/* ── Modals & Dialog overlays ── */
+.mov {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mod {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  color: #1C2333;
+}
+.mod h3 {
+  margin-bottom: 14px;
+  font-size: .95rem;
+  font-weight: bold;
+  color: #1C2333;
+}
+.mod label {
+  display: block;
+  font-size: .7rem;
+  font-weight: 600;
+  color: #64748B;
+  margin: 8px 0 3px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.mod input:not([type="radio"]), .mod textarea, .mod select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  font-size: .8rem;
+  color: #1C2333;
+  outline: none;
+  background: #fff;
+}
+.mod input:not([type="radio"]):focus, .mod textarea:focus, .mod select:focus {
+  border-color: #2D8A4E;
+}
+.mbtns {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.bok {
+  flex: 1;
+  padding: 8px;
+  background: #2D8A4E;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: .8rem;
+  text-align: center;
+}
+.bok:hover {
+  background: #1e6b39;
+}
+.bdanger {
+  flex: 1;
+  padding: 8px;
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: .8rem;
+  text-align: center;
+}
+.bdanger:hover {
+  background: #991b1b;
+}
+.bcancel {
+  flex: 1;
+  padding: 8px;
+  background: #f1f5f9;
+  color: #374151;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: .8rem;
+  text-align: center;
+}
+.bcancel:hover {
+  background: #e2e8f0;
+}
+.sbbtn {
+  width: 100%;
+  padding: 7px;
+  border: 1.5px dashed #CBD5E1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #64748B;
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 600;
+  transition: all .15s;
+}
+.sbbtn:hover {
+  border-color: #2D8A4E;
+  color: #2D8A4E;
+}
+
+/* Category Grid selectors inside modal */
+.cat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 9px;
+}
+.cat-btn {
+  padding: 6px 4px;
+  border-radius: 4px;
+  border: 1px solid #D0D5DD;
+  background: #fff;
+  cursor: pointer;
+  font-size: .68rem;
+  text-align: center;
+  transition: all .15s;
+  color: #444;
+}
+.cat-btn.sel {
+  border-color: #2D8A4E;
+  background: #2D8A4E;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Status selection row */
+.status-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 9px;
+}
+.stat-btn {
+  flex: 1;
+  padding: 5px 4px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: .68rem;
+  font-weight: 700;
+  text-align: center;
+  transition: all .15s;
+}
+.stat-btn.open {
+  border-color: #FB923C;
+  color: #FB923C;
+  background: #fff;
+}
+.stat-btn.open.sel {
+  background: #FB923C;
+  color: #fff;
+}
+.stat-btn.repeat {
+  border-color: #EF4444;
+  color: #EF4444;
+  background: #fff;
+}
+.stat-btn.repeat.sel {
+  background: #EF4444;
+  color: #fff;
+}
+.stat-btn.resolved {
+  border-color: #22C55E;
+  color: #22C55E;
+  background: #fff;
+}
+.stat-btn.resolved.sel {
+  background: #22C55E;
+  color: #fff;
+}
+
+/* Photo previews inside modal */
+#fi-photo-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.photo-wrap {
+  position: relative;
+  display: inline-block;
+}
+.photo-wrap img {
+  width: 54px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid #ddd;
+}
+.fi-photo-del {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #c0392b;
+  color: #fff;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  font-size: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+}
+
+/* ── Leaflet marker overrides ── */
+.fi-marker-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.fi-marker-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow: 0 3px 10px rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .85rem;
+  color: #fff;
+  font-weight: 800;
+}
+.fi-marker-label {
+  margin-top: 3px;
+  background: rgba(255,255,255,.97);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1px 6px rgba(0,0,0,.25);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1C2333;
+}
+
+/* ── Finding popup styles ── */
+.fi-popup {
+  min-width: 240px;
+  max-width: 300px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.fi-pop-hdr {
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: .82rem;
+  color: #fff;
+  border-radius: 7px 7px 0 0;
+}
+.fi-pop-body {
+  padding: 8px 12px;
+  font-size: .72rem;
+  color: #333;
+  background: #fff;
+}
+.fi-timeline {
+  border-left: 2px solid #e0e0e0;
+  margin: 6px 0 4px 6px;
+  padding-left: 10px;
+}
+.fi-tl-entry {
+  margin-bottom: 8px;
+  position: relative;
+}
+.fi-tl-entry::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #bbb;
+}
+.fi-tl-date {
+  font-size: .62rem;
+  color: #999;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+.fi-tl-status {
+  display: inline-block;
+  font-size: .6rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: #fff;
+  margin-bottom: 3px;
+}
+.fi-tl-note {
+  font-size: .68rem;
+  color: #555;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.fi-tl-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+.fi-tl-photos img {
+  width: 60px;
+  height: 45px;
+  object-fit: cover;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+  transition: transform 0.15s;
+}
+.fi-tl-photos img:hover {
+  transform: scale(1.05);
+}
+.fi-add-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  background: #2D8A4E;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .7rem;
+  font-weight: 700;
+  text-align: center;
+}
+.fi-add-btn:hover {
+  background: #1e6b39;
+}
+.fi-del-btn {
+  float: right;
+  background: none;
+  border: none;
+  color: #c0392b;
+  cursor: pointer;
+  font-size: .7rem;
+  padding: 0 4px;
+  font-weight: bold;
+}
+.fi-del-btn:hover {
+  text-decoration: underline;
+}
+
+/* Lightbox full-view */
+#fi-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.85);
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+#fi-lightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+/* ── Leaflet Control Layers Overrides ── */
+.leaflet-control-layers {
+  background: #ffffff !important;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  padding: 6px 10px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 11px !important;
+  color: #374151 !important;
+}
+.leaflet-control-layers-toggle {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='%23374151' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>") !important;
+  background-size: 20px 20px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  width: 36px !important;
+  height: 36px !important;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 6px !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+.leaflet-control-layers-list {
+  margin: 0 !important;
+  padding: 2px 0 !important;
+}
+.leaflet-control-layers-selector {
+  margin-top: 2px !important;
+  margin-right: 6px !important;
+  accent-color: #2D8A4E !important;
+}
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+  border: 1.5px solid #CBD5E1 !important;
+  background-color: #ffffff !important;
+  color: #374151 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+.leaflet-bar {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  /* Logo colors */
+  --primary: #2D8A4E;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f0fdf4;
+  --accent-foreground: #166534;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2D8A4E;
+
+  --sidebar-bg: #1C2333;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-accent: rgba(255, 255, 255, 0.1);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+}
