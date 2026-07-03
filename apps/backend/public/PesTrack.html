@@ -530,59 +530,8 @@ const LS_CZ_KEY = 'pt_constr_gouna_v1';
 // ════════════════════════════════════════════════════════════════════
 // PARCEL → QUADRANT TABLE (EDIT THIS TABLE ONLY)
 // ════════════════════════════════════════════════════════════════════
-// ── Built-in parcel list (updated from PesTrack_gouna_parcels_and_quadrants.xlsx) ──
-const _BUILTIN_PARCELS = [
-  {name:'AS4',              quad:'NW', lat:27.429844, lng:33.654529},
-  {name:'AS3',              quad:'NW', lat:27.428280, lng:33.659535},
-  {name:'AS2',              quad:'NW', lat:27.423932, lng:33.659330},
-  {name:'AS1',              quad:'NW', lat:27.417989, lng:33.661930},
-  {name:'Fanadir Bay 2',    quad:'NW', lat:27.430220, lng:33.662351},
-  {name:'Nines',            quad:'NW', lat:27.420732, lng:33.656251},
-  {name:'North Bay',        quad:'NW', lat:27.429358, lng:33.649081},
-  {name:'Ancient Hill',     quad:'NW', lat:27.421369, lng:33.652870},
-  {name:'Fanadir Bay 1',    quad:'NE', lat:27.422167, lng:33.666699},
-  {name:'Fanadir Lagoon',   quad:'NE', lat:27.416294, lng:33.668184},
-  {name:'Fanadir Marina',   quad:'NE', lat:27.419112, lng:33.670189},
-  {name:'Um Jummar',        quad:'NE', lat:27.412056, lng:33.669503},
-  {name:'Mangroovy',        quad:'NE', lat:27.415959, lng:33.674517},
-  {name:'New Marina',       quad:'NE', lat:27.411751, lng:33.676053},
-  {name:'Fanadir Shore',    quad:'NE', lat:27.419644, lng:33.673575},
-  {name:'Joubal 1',         quad:'NE', lat:27.409179, lng:33.671129},
-  {name:'Joubal 2',         quad:'NE', lat:27.410130, lng:33.668415},
-  {name:'Cyan the Range',   quad:'SW', lat:27.408812, lng:33.655498},
-  {name:'Shedwan',          quad:'SW', lat:27.400256, lng:33.656584},
-  {name:'Tawila',           quad:'SW', lat:27.402020, lng:33.661373},
-  {name:'Swan Lake',        quad:'SW', lat:27.405161, lng:33.659119},
-  {name:'Containers',       quad:'SW', lat:27.397179, lng:33.646260},
-  {name:'Sholan 1',         quad:'SW', lat:27.395183, lng:33.650768},
-  {name:'Sholan 2',         quad:'SW', lat:27.396049, lng:33.647897},
-  {name:'Scarab',           quad:'SW', lat:27.393171, lng:33.648000},
-  {name:'Bali',             quad:'SW', lat:27.390961, lng:33.647817},
-  {name:'G Cribbs 1',       quad:'SW', lat:27.395471, lng:33.641827},
-  {name:'G Cribbs 2',       quad:'SW', lat:27.394183, lng:33.642708},
-  {name:'Toban',            quad:'SW', lat:27.396737, lng:33.665663},
-  {name:'Siba',             quad:'SW', lat:27.414314, lng:33.653550},
-  {name:'Encore',           quad:'SW', lat:27.399205, lng:33.649043},
-  {name:'New marina',       quad:'SE', lat:27.411751, lng:33.676053},
-  {name:'Abu Tig Marina',   quad:'SE', lat:27.408094, lng:33.676053},
-  {name:'Abu Tig Hill',     quad:'SE', lat:27.409776, lng:33.674420},
-  {name:'Cyan',             quad:'SE', lat:27.407449, lng:33.663410},
-  {name:'Upper Nubian',     quad:'SE', lat:27.405485, lng:33.670256},
-  {name:'Nubian Village',   quad:'SE', lat:27.399229, lng:33.677050},
-  {name:'New Nubia',        quad:'SE', lat:27.404607, lng:33.674670},
-  {name:'South Marina',     quad:'SE', lat:27.401498, lng:33.670980},
-  {name:'Downtown',         quad:'SE', lat:27.396398, lng:33.674196},
-  {name:'Hill Villas',      quad:'SE', lat:27.397253, lng:33.682278},
-  {name:'North Golf',       quad:'SE', lat:27.393594, lng:33.671179},
-  {name:'Zerzera',          quad:'SE', lat:27.402145, lng:33.666806},
-  {name:'Festival Plaza',   quad:'SE', lat:27.403971, lng:33.668101},
-  {name:'Art Island',       quad:'SE', lat:27.406677, lng:33.667668},
-  // General-area fallbacks (used when no specific parcel is near)
-  {name:'🔸 NW — General Area', quad:'NW', lat:27.425, lng:33.655},
-  {name:'🔸 NE — General Area', quad:'NE', lat:27.415, lng:33.670},
-  {name:'🔸 SW — General Area', quad:'SW', lat:27.400, lng:33.650},
-  {name:'🔸 SE — General Area', quad:'SE', lat:27.400, lng:33.670},
-];
+// Parcels come exclusively from the API (GET /api/parcels). No built-in list —
+// upload parcels via "📂 Update Parcels" if a site has none.
 
 // ── Parcel loader ──────────────────────────────────────────────────
 function loadParcels() {
@@ -598,6 +547,8 @@ function loadParcels() {
   })
   .then(data => {
     parcels = data.parcels; // store db objects with id
+    // Use only API/DB parcels — no built-in fallback, so every dropdown entry
+    // maps to a real parcel_id.
     window._PARCELS = data.parcels.map(p => ({
       name: p.parcel_name,
       quad: p.quadrant,
@@ -605,14 +556,16 @@ function loadParcels() {
       lng: p.lng ? Number(p.lng) : null
     }));
     if (window._PARCELS.length === 0) {
-      window._PARCELS = _BUILTIN_PARCELS;
+      showNotif('⚠️ No parcels found for this site — upload parcels via "📂 Update Parcels".', true, 5000);
     }
     buildParcelSelect();
     updateParcelBadge();
   })
   .catch(err => {
     console.error(err);
-    window._PARCELS = _BUILTIN_PARCELS;
+    parcels = [];
+    window._PARCELS = [];
+    showNotif('❌ Failed to load parcels', true, 3000);
     buildParcelSelect();
     updateParcelBadge();
   });
@@ -656,6 +609,9 @@ function updateParcelBadge(){
   const btn = document.querySelector('[onclick*="parcel-xlsx-input"]');
   if(!btn) return;
   const n = (window._PARCELS||[]).filter(p=>!p.name.includes('General')).length;
+  // Show the loaded parcel count on the button when parcels exist; otherwise
+  // just the plain label.
+  btn.textContent = n > 0 ? `📂 Parcels (${n})` : '📂 Update Parcels';
   btn.title = `${n} parcels loaded — click to update`;
 }
 window._QUADS = {NW:'Gouna NW', NE:'Gouna NE', SW:'Gouna SW', SE:'Gouna SE'};
@@ -1092,12 +1048,20 @@ function onFindingsMapClick(e){
 // ── Add visit to existing location (from popup) ───────────────────
 function addVisitToLocation(locId){
   editingLocId = locId;
-  pendingFindingLL = null;
   pendingPhotos = [];
   document.getElementById('fi-photo-preview').innerHTML = '';
-  document.getElementById('fi-coords').value = '';
   // Resolve loc first so it can be used below
   const loc = findings.find(f=>f.locId===locId);
+  // A new visit belongs to this finding's location — bind its existing lat/lng
+  // into the coords field (and pendingFindingLL) instead of leaving it blank.
+  if(loc && typeof loc.lat === 'number' && typeof loc.lng === 'number'){
+    pendingFindingLL = { lat: loc.lat, lng: loc.lng };
+    document.getElementById('fi-coords').value =
+      loc.lat.toFixed(6) + ', ' + loc.lng.toFixed(6);
+  } else {
+    pendingFindingLL = null;
+    document.getElementById('fi-coords').value = '';
+  }
   const _prevLbl = loc && loc.visits[0] ? loc.visits[0].label : '';
   document.getElementById('fi-lbl').value = _prevLbl;
   document.getElementById('fi-notes').value = '';
