@@ -3,13 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ConfirmProvider } from './components/ConfirmDialog';
-// import { LoginPage } from './pages/LoginPage';
 // import { FrontendPage } from './pages/FrontendPage';
 import { AdminLayout } from './admin/AdminLayout';
 import { UsersPage } from './admin/pages/UsersPage';
 import { SitesPage } from './admin/pages/SitesPage';
 import { AuditPage } from './admin/pages/AuditPage';
 import { Loader2 } from 'lucide-react';
+import { LoginPage } from './pages/LoginPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
