@@ -16,7 +16,10 @@ services:
     rootDir: apps/backend
     # 1) install backend  2) build the React frontend (outputs into
     # apps/backend/public)  3) apply DB migrations + seed the admin user.
-    buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend && npm run migrate && npm run seed
+    # --include=dev on the frontend install forces devDependencies (@types/*,
+    # vite, typescript, @vitejs/plugin-react) to install despite NODE_ENV=production,
+    # which npm would otherwise skip — the build needs them.
+    buildCommand: npm install && cd ../frontend && npm install --include=dev && npm run build && cd ../backend && npm run migrate && npm run seed
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
