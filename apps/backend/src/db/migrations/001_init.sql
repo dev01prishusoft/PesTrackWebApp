@@ -63,7 +63,23 @@ CREATE TABLE IF NOT EXISTS escalation_options (
     sort_order INTEGER DEFAULT 0
 );
 
--- 5. LOCATIONS (findings)
+-- 5. PARCELS  (must exist before locations, which references parcels(id))
+CREATE TABLE IF NOT EXISTS parcels (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    site_id UUID REFERENCES sites(id) NOT NULL,
+    parcel_name VARCHAR(100) NOT NULL,
+    coordinate VARCHAR(100),
+    lat DECIMAL(10, 6),
+    lng DECIMAL(10, 6),
+    quadrant VARCHAR(10),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(site_id, parcel_name)
+);
+CREATE INDEX IF NOT EXISTS idx_parcels_site_id ON parcels(site_id);
+CREATE INDEX IF NOT EXISTS idx_parcels_quadrant ON parcels(quadrant);
+
+-- 6. LOCATIONS (findings)
 CREATE TABLE IF NOT EXISTS locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     site_id UUID REFERENCES sites(id) NOT NULL,
@@ -107,22 +123,6 @@ CREATE TABLE IF NOT EXISTS photos (
     created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_photos_visit_id ON photos(visit_id);
-
--- 8. PARCELS
-CREATE TABLE IF NOT EXISTS parcels (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    site_id UUID REFERENCES sites(id) NOT NULL,
-    parcel_name VARCHAR(100) NOT NULL,
-    coordinate VARCHAR(100),
-    lat DECIMAL(10, 6),
-    lng DECIMAL(10, 6),
-    quadrant VARCHAR(10),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(site_id, parcel_name)
-);
-CREATE INDEX IF NOT EXISTS idx_parcels_site_id ON parcels(site_id);
-CREATE INDEX IF NOT EXISTS idx_parcels_quadrant ON parcels(quadrant);
 
 -- 9. CONSTRUCTION ZONES (visual markers only)
 CREATE TABLE IF NOT EXISTS construction_zones (
