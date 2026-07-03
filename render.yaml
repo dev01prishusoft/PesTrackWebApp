@@ -17,6 +17,9 @@ services:
     # Build the frontend (which outputs into apps/backend/public), then the
     # backend has both the API and the compiled React app to serve.
     buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend
+    # Runs after build, before the app starts — applies DB migrations and seeds
+    # the admin user. Safe to re-run: migrations are tracked, seed upserts.
+    preDeployCommand: npm run predeploy
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
