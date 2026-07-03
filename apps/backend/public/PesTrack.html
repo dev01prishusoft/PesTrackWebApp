@@ -1338,9 +1338,20 @@ function saveFinding(){
     
     const nearestP = window._nearestParcel ? window._nearestParcel(ll.lat, ll.lng) : null;
     const assignedParcel = parcel || (nearestP ? nearestP.name : null);
-    
-    const pObj = parcels.find(p => p.parcel_name === assignedParcel);
+
+    // Resolve the parcel NAME back to its DB id. Match is trimmed + case-insensitive
+    // so minor whitespace/casing differences still resolve. If a parcel was chosen
+    // but can't be found in the DB list (e.g. a built-in fallback parcel that isn't
+    // in the database), warn instead of silently saving parcel_id = null.
+    const _norm = s => (s || '').trim().toLowerCase();
+    const pObj = assignedParcel
+      ? parcels.find(p => _norm(p.parcel_name) === _norm(assignedParcel))
+      : null;
     const parcelId = pObj ? pObj.id : null;
+    if (assignedParcel && !parcelId) {
+      console.warn('Parcel "' + assignedParcel + '" not found in DB parcels — saving without parcel_id.');
+      showNotif('⚠️ Parcel "' + assignedParcel + '" is not in the database — finding saved without a parcel link.', true, 5000);
+    }
     
     const maxRef = findings.reduce((mx,f)=>{ const n=parseInt(f.refNum,10)||0; return n>mx?n:mx; }, 0);
     const nextRef = String(maxRef + 1).padStart(3,'0');
@@ -1751,6 +1762,9 @@ function loadConstrZones(){
       lat: Number(z.lat),
       lng: Number(z.lng)
     }));
+    // Expose for the PDF generator (mirrors window._ptFindings). Without this,
+    // window._ptConstrZones is undefined and construction zones never render in the PDF.
+    window._ptConstrZones = constrZones;
     renderAllConstrZones();
   })
   .catch(err => {
@@ -2101,7 +2115,11 @@ window._importFindingsData = function(arr, czArr){
       }));
       
       return uploadPhotosPromise.then(firstPhotos => {
-        const pObj = parcels.find(p => p.parcel_name === loc.parcel);
+        // Trimmed + case-insensitive name→id match (see saveFinding).
+        const _norm = s => (s || '').trim().toLowerCase();
+        const pObj = loc.parcel
+          ? parcels.find(p => _norm(p.parcel_name) === _norm(loc.parcel))
+          : null;
         const parcelId = pObj ? pObj.id : null;
         
         const payload = {
