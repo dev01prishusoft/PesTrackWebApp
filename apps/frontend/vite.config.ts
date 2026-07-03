@@ -17,7 +17,9 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../../backend/public',
+    // Build into the backend that Render actually serves (apps/backend/public),
+    // which is one level up from apps/frontend — NOT the stale repo-root /backend.
+    outDir: '../backend/public',
     emptyOutDir: false,
   },
   base: '/',

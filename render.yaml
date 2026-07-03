@@ -1,0 +1,57 @@
+# Render Blueprint for PesTrack (single-service deploy).
+# The backend (Node/Express) serves the built React frontend from backend/public,
+# so both the app UI and the API live at one URL.
+#
+# After first deploy, open the service Shell and run:
+#   npm run migrate
+#   npm run seed
+#
+# Secret values (marked sync: false) must be set in the Render dashboard.
+
+services:
+  - type: web
+    name: pestrack
+    runtime: node
+    plan: free
+    rootDir: apps/backend
+    # Build the frontend (which outputs into apps/backend/public), then the
+    # backend has both the API and the compiled React app to serve.
+    buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Postgres connection string. Use the Render database defined below so its
+      # internal URL is injected automatically.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pestrack-db
+          property: connectionString
+      # Generated once by Render; keeps sessions valid across restarts.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRY
+        value: 24h
+      # Admin bootstrap (used by `npm run seed`). Set real values in the dashboard.
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # S3 photo storage (optional). Set in the dashboard; never commit secrets.
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+databases:
+  - name: pestrack-db
+    plan: free
+    databaseName: pestrackdb
+    user: pestrack
