@@ -2,9 +2,9 @@
 # The backend (Node/Express) serves the built React frontend from backend/public,
 # so both the app UI and the API live at one URL.
 #
-# After first deploy, open the service Shell and run:
-#   npm run migrate
-#   npm run seed
+# Free plan has no Shell and no Pre-Deploy Command, so DB migrate + seed are
+# folded into the build step below. They are safe to re-run every deploy:
+# migrations are tracked (applied once), the admin seed upserts.
 #
 # Secret values (marked sync: false) must be set in the Render dashboard.
 
@@ -14,12 +14,9 @@ services:
     runtime: node
     plan: free
     rootDir: apps/backend
-    # Build the frontend (which outputs into apps/backend/public), then the
-    # backend has both the API and the compiled React app to serve.
-    buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend
-    # Runs after build, before the app starts — applies DB migrations and seeds
-    # the admin user. Safe to re-run: migrations are tracked, seed upserts.
-    preDeployCommand: npm run predeploy
+    # 1) install backend  2) build the React frontend (outputs into
+    # apps/backend/public)  3) apply DB migrations + seed the admin user.
+    buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend && npm run migrate && npm run seed
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
