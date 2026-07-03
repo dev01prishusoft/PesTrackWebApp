@@ -41,6 +41,12 @@ app.use('/api/audit', auditRoutes);
 // Static frontend: admin panel + dashboard served from the same service.
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// SPA fallback: any non-API GET serves the React app so client-side routes
+// (e.g. deep links / page reloads) resolve to index.html.
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
 app.use('/api', notFound);
 app.use(errorHandler);
 
