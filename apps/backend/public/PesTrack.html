@@ -68,10 +68,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </head>
 <body>
 
+<div id="login-container" style="display:none;">
+  <div id="login-card">
+    <img id="login-logo" src="/sotaico-logo.png" alt="SOTAICO Logo">
+    <h2 class="login-title">PesTrack</h2>
+    <p class="login-subtitle">Sign in to access your properties</p>
+    <div id="login-error" class="login-error"></div>
+    <div class="input-group">
+      <label for="username">Username</label>
+      <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+    </div>
+    <div class="input-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="login()">Login</button>
+  </div>
+</div>
+
+<div id="app-container" style="display:none;">
+
 <div id="hdr">
   <img id="hdr-logo" alt="PesTrack">
   <div class="vdiv"></div>
-  <span id="hdr-sub">El Gouna — Site Findings</span>
+  <select id="site-selector" onchange="changeSite(this.value)" style="background:#fff;color:#374151;border:1.5px solid #CBD5E1;border-radius:6px;padding:6px 10px;font-size:0.9rem;font-weight:600;font-family:inherit;outline:none;cursor:pointer;"></select>
   <div class="hdr-right">
     <button class="hbtn" id="btn-fi" onclick="startFindingsTool()">🔍 Add Finding</button>
     <button class="hbtn" id="btn-cz" onclick="startConstrTool()" title="Drop a construction zone marker">🏗 Constr. Zone</button>
@@ -84,6 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="hbtn" style="background:#0F766E;color:#fff;border-color:#0F766E" onclick="document.getElementById('parcel-xlsx-input').click()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
     <input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importFindings(this)">
     <input type="file" id="parcel-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="importParcelsXlsx(this)">
+    <button class="hbtn" style="background:#EF4444;color:#fff;border-color:#EF4444" onclick="logout()">Logout</button>
   </div>
 </div>
 
@@ -277,7 +298,7 @@ function importFindings(input){
 }
 window.importFindings = importFindings;
 
-window.addEventListener('load', init);
+
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -344,14 +365,156 @@ window.addEventListener('load', init);
   border-radius:50%;width:14px;height:14px;font-size:.5rem;display:flex;
   align-items:center;justify-content:center;cursor:pointer;border:none}
 .photo-wrap{position:relative;display:inline-block}
+
+/* Glassmorphism Login Container */
+#login-container {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #f1f5f9;
+}
+#login-card {
+  width: 90%;
+  max-width: 400px;
+  background: rgba(30, 41, 59, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+  text-align: center;
+  animation: fadeIn 0.5s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+#login-logo {
+  height: 64px;
+  margin-bottom: 24px;
+}
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #ffffff;
+  letter-spacing: -0.025em;
+}
+.login-subtitle {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin-bottom: 28px;
+}
+.input-group {
+  position: relative;
+  margin-bottom: 20px;
+  text-align: left;
+}
+.input-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+.input-group input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+.input-group input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  background: rgba(15, 23, 42, 0.8);
+}
+.login-btn {
+  width: 100%;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+.login-btn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.5);
+  transform: translateY(-1px);
+}
+.login-btn:active {
+  transform: translateY(0);
+}
+.login-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+  display: none;
+  text-align: left;
+}
 </style>
 
 <script>
 (function(){
 'use strict';
 
-// ── Constants ──────────────────────────────────────────────────────
-const CATS = [
+// ── Active Session & Scoped Data State ──────────────────────────────
+let currentSiteId = null;
+let currentUser = null;
+let sites = [];
+let parcels = [];
+
+// Reference map tables (label <-> database UUID)
+let categoryLabelToId = {};
+let categoryIdToLabel = {};
+let statusLabelToId = {};
+let statusIdToLabel = {};
+let escalationLabelToId = {};
+let escalationIdToLabel = {};
+
+const CATEGORY_MAP = {
+  'stp_trench': 'STP / Trenches',
+  'organic': 'Exposed Waste',
+  'structural': 'Dysfunctional Swim Pool',
+  'housekeeping': 'Structural',
+  'irrigation': 'Landscape/Irrigation',
+  'construction': 'Construction Debris',
+  'mep': 'Drains & Manholes',
+  'other': 'Other'
+};
+
+const STATUS_MAP = {
+  'open': '1st Offense',
+  'repeat': 'Repeat',
+  'resolved': 'Resolved'
+};
+
+// ── Constants (now mutable variables for dynamic API mapping) ────────
+let CATS = [
   {id:'stp_trench',    label:'STP / Trenches',     color:'#1D4ED8'},
   {id:'organic',       label:'Exposed Waste',       color:'#78350F'},
   {id:'structural',    label:'Dysfunctional Swim Pool',          color:'#6B7280'},
@@ -361,8 +524,8 @@ const CATS = [
   {id:'mep',           label:'Drains & Manholes',      color:'#0E7490'},
   {id:'other',         label:'Other',               color:'#374151'},
 ];
-window._CATS = CATS;  // shared with the PDF <script> block (consts don't cross script tags)
-const STAT_CFG = {
+window._CATS = CATS;  // shared with the PDF <script> block
+let STAT_CFG = {
   open:     {label:'1st Offense', color:'#FB923C', emoji:'🟠'},
   repeat:   {label:'Repeat',      color:'#EF4444', emoji:'🔴'},
   resolved: {label:'Resolved',    color:'#22C55E', emoji:'🟢'},
@@ -427,169 +590,80 @@ const _BUILTIN_PARCELS = [
   {name:'🔸 SE — General Area', quad:'SE', lat:27.400, lng:33.670},
 ];
 
-// ── Parcel loader — try localStorage override first, else use built-in ──
-(function initParcels(){
-  try {
-    const saved = localStorage.getItem('_pt_parcels_custom');
-    if(saved){
-      const parsed = JSON.parse(saved);
-      if(Array.isArray(parsed) && parsed.length > 0){
-        window._PARCELS = parsed;
-        console.log(`📦 Parcels loaded from custom upload: ${parsed.length} parcels`);
-        return;
-      }
+// ── Parcel loader ──────────────────────────────────────────────────
+function loadParcels() {
+  if (!currentSiteId) return Promise.resolve();
+  const token = localStorage.getItem('pt_admin_token');
+  return fetch('/api/parcels?siteId=' + currentSiteId, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to fetch parcels');
+    return res.json();
+  })
+  .then(data => {
+    parcels = data.parcels; // store db objects with id
+    window._PARCELS = data.parcels.map(p => ({
+      name: p.parcel_name,
+      quad: p.quadrant,
+      lat: p.lat ? Number(p.lat) : null,
+      lng: p.lng ? Number(p.lng) : null
+    }));
+    if (window._PARCELS.length === 0) {
+      window._PARCELS = _BUILTIN_PARCELS;
     }
-  } catch(e){}
-  window._PARCELS = _BUILTIN_PARCELS;
-  console.log(`📦 Parcels loaded from built-in list: ${_BUILTIN_PARCELS.length} parcels`);
-})();
+    buildParcelSelect();
+    updateParcelBadge();
+  })
+  .catch(err => {
+    console.error(err);
+    window._PARCELS = _BUILTIN_PARCELS;
+    buildParcelSelect();
+    updateParcelBadge();
+  });
+}
 
 // ── XLSX parcel importer ──────────────────────────────────────────
 function importParcelsXlsx(input){
   const file = input.files[0];
   if(!file){ return; }
-  const reader = new FileReader();
-  reader.onload = function(e){
-    try{
-      if(typeof XLSX === 'undefined'){
-        showNotif('⚠️ XLSX library not loaded — try refreshing', true, 4000); return;
-      }
-      const wb = XLSX.read(e.target.result, {type:'array'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-
-      // Detect header row — look for a row containing "parcel" and "coordinate"
-      let headerIdx = -1;
-      for(let i=0;i<Math.min(rows.length,5);i++){
-        const r = rows[i].map(c=>String(c).toLowerCase());
-        if(r.some(c=>c.includes('parcel')) && r.some(c=>c.includes('coord'))){
-          headerIdx = i; break;
-        }
-      }
-      if(headerIdx < 0){
-        showNotif('⚠️ Could not find header row — need columns: parcel name, coordinate, quadrant', true, 5000); return;
-      }
-      const headers = rows[headerIdx].map(c=>String(c).toLowerCase().trim());
-      const iName  = headers.findIndex(h=>h.includes('parcel'));
-      const iCoord = headers.findIndex(h=>h.includes('coord'));
-      const iQuad  = headers.findIndex(h=>h.includes('quad'));
-      if(iName<0||iCoord<0||iQuad<0){
-        showNotif('⚠️ Columns not recognised — need: "parcel name", "coordinate", "quadrant"', true, 5000); return;
-      }
-
-      // Parse "27.429844°N 33.654529°E" → {lat, lng}
-      function parseCoordCell(raw){
-        const s = String(raw).replace(/[°NSEW\s]/gi,' ').trim();
-        const parts = s.split(/\s+/).map(Number).filter(n=>!isNaN(n));
-        if(parts.length < 2) return null;
-        let lat = parts[0], lng = parts[1];
-        // Handle S/W hemispheres
-        if(/S/i.test(raw)) lat = -lat;
-        if(/W/i.test(raw)) lng = -lng;
-        if(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) return {lat, lng};
-        return null;
-      }
-
-      const parcels = [];
-      for(let i=headerIdx+1;i<rows.length;i++){
-        const row = rows[i];
-        const name  = String(row[iName]||'').trim();
-        const coord = parseCoordCell(row[iCoord]);
-        const quad  = String(row[iQuad]||'').trim().toUpperCase();
-        if(!name || !coord || !quad) continue;
-        parcels.push({name, quad, lat:coord.lat, lng:coord.lng});
-      }
-
-      if(parcels.length === 0){
-        showNotif('⚠️ No valid parcel rows found in file', true, 4000); return;
-      }
-
-      // Add general-area fallbacks
-      ['NW','NE','SW','SE'].forEach(q=>{
-        if(!parcels.find(p=>p.quad===q && p.name.includes('General'))){
-          const defaults = {NW:{lat:27.425,lng:33.655},NE:{lat:27.415,lng:33.670},SW:{lat:27.400,lng:33.650},SE:{lat:27.400,lng:33.670}};
-          parcels.push({name:`🔸 ${q} — General Area`, quad:q, ...defaults[q]});
-        }
-      });
-
-      // ── Diff against current list — warn about quad changes on existing parcels ──
-      const prevParcels = window._PARCELS || [];
-      const quadChanges = [];
-      const coordChanges = [];
-      parcels.forEach(np => {
-        const op = prevParcels.find(p => p.name === np.name);
-        if(!op || op.name.includes('General')) return;
-        if(op.quad !== np.quad){
-          quadChanges.push(`"${np.name}": ${op.quad} → ${np.quad}`);
-        } else {
-          const dLat = Math.abs(op.lat - np.lat), dLng = Math.abs(op.lng - np.lng);
-          if(dLat > 0.0001 || dLng > 0.0001){
-            coordChanges.push(`"${np.name}"`);
-          }
-        }
-      });
-
-      // Save to localStorage and apply
-      try{ localStorage.setItem('_pt_parcels_custom', JSON.stringify(parcels)); }
-      catch(e){ console.warn('Could not persist parcels:', e); }
-      window._PARCELS = parcels;
-
-      // Refresh parcel dropdown in open modal if any
-      if(typeof buildParcelSelect === 'function') buildParcelSelect();
-
-      // Build notification
-      let msg = `✅ ${parcels.length-4} parcels loaded from ${file.name}`;
-      if(quadChanges.length || coordChanges.length){
-        // Show detailed warning modal instead of just a notif
-        let html = `<p style="margin-bottom:10px;font-size:.82rem;color:#374151">Parcels updated successfully. Some existing parcels have changed:</p>`;
-        if(quadChanges.length){
-          html += `<p style="font-size:.75rem;font-weight:700;color:#B45309;margin-bottom:4px">⚠️ Quadrant changed (affects existing findings' quadrant grouping in PDF):</p>`;
-          html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px">${quadChanges.map(c=>`<li>${c}</li>`).join('')}</ul>`;
-        }
-        if(coordChanges.length){
-          html += `<p style="font-size:.75rem;font-weight:700;color:#1D4ED8;margin-bottom:4px">ℹ️ Coordinates moved (affects auto-detection for new findings only):</p>`;
-          html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px">${coordChanges.map(c=>`<li>${c}</li>`).join('')}</ul>`;
-        }
-        if(quadChanges.length){
-          html += `<p style="font-size:.72rem;color:#6B7280">Existing findings keep their assigned parcel name. Their quadrant in the PDF now reflects the updated quadrant above.</p>`;
-        }
-        // Inject into a simple modal
-        let warnMod = document.getElementById('m-parcel-warn');
-        if(!warnMod){
-          warnMod = document.createElement('div');
-          warnMod.className = 'mov'; warnMod.id = 'm-parcel-warn';
-          warnMod.innerHTML = '<div class="mod" style="max-width:420px"><h3>&#128194; Parcels Updated</h3><div id="parcel-warn-body"></div><div class="mbtns"><button class="bok" onclick="document.getElementById(\'m-parcel-warn\').style.display=\'none\'">OK</button></div></div>';
-          document.body.appendChild(warnMod);
-        }
-        document.getElementById('parcel-warn-body').innerHTML = html;
-        warnMod.style.display = 'flex';
-      } else {
-        showNotif(msg);
-      }
-      updateParcelBadge();
-    }catch(err){
-      console.error(err);
-      showNotif('❌ Error reading XLSX: ' + err.message, true, 5000);
-    }
-    input.value = '';
-  };
-  reader.readAsArrayBuffer(file);
+  
+  showNotif('⏳ Uploading parcel list...', false, 0);
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('siteId', currentSiteId);
+  
+  const token = localStorage.getItem('pt_admin_token');
+  fetch('/api/parcels/upload', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: formData
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  })
+  .then(data => {
+    loadParcels().then(() => {
+      showNotif('✅ Parcel list updated');
+    });
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to upload parcels', true, 3000);
+  });
+  input.value = '';
 }
 window.importParcelsXlsx = importParcelsXlsx;
 
 function updateParcelBadge(){
   const btn = document.querySelector('[onclick*="parcel-xlsx-input"]');
   if(!btn) return;
-  const custom = !!localStorage.getItem('_pt_parcels_custom');
   const n = (window._PARCELS||[]).filter(p=>!p.name.includes('General')).length;
-  btn.title = custom
-    ? `${n} parcels loaded from custom upload — click to update`
-    : `${n} parcels (built-in) — click to upload an updated XLSX`;
-  btn.style.opacity = custom ? '1' : '0.85';
-  if(custom) btn.textContent = `📂 Parcels (${n})`;
+  btn.title = `${n} parcels loaded — click to update`;
 }
-// Run once on load
-window.addEventListener('load', ()=>{ setTimeout(updateParcelBadge, 500); });
 window._QUADS = {NW:'Gouna NW', NE:'Gouna NE', SW:'Gouna SW', SE:'Gouna SE'};
 window._QUAD_ORDER = ['NW','NE','SW','SE'];
 window._nearestParcel = function(lat, lng){
@@ -689,24 +763,15 @@ function initFindings(){
     findingsLayer = L.layerGroup().addTo(map);
     constrLayer   = L.layerGroup().addTo(map);
 
-
-    // Inject sidebar section before the export section
     injectSidebar();
-
-    // Inject header button before Export PDF
     injectHeaderBtn();
-
-    // Inject modals
     injectModals();
 
-    // Lightbox
     document.getElementById('fi-lightbox').addEventListener('click', ()=>{
       document.getElementById('fi-lightbox').style.display='none';
     });
 
-    // Load persisted data
-    loadFindings();
-    loadConstrZones();
+    changeSite(currentSiteId);
   });
 }
 
@@ -846,7 +911,15 @@ function injectModals(){
     </div>`;
   document.body.appendChild(modal);
 
-  // Build category grid
+  // Sync status-button labels/emoji with the API (STAT_CFG was rebuilt from
+  // /api/references in bootApp before this modal was created)
+  ['open','repeat','resolved'].forEach(id => {
+    const btn = document.getElementById('sb-' + id);
+    const cfg = STAT_CFG[id];
+    if (btn && cfg) btn.textContent = (cfg.emoji ? cfg.emoji + ' ' : '') + cfg.label;
+  });
+
+  // Build category grid (CATS was rebuilt from /api/references in bootApp)
   const grid = document.getElementById('fi-cat-grid');
   CATS.forEach(c => {
     const btn = document.createElement('button');
@@ -882,7 +955,10 @@ window.startFindingsTool = startFindingsTool;
 
 // ── Construction Zone tool ─────────────────────────────────────────
 function startConstrTool(){
-  // Cancel findings tool if active
+  if (currentUser && currentUser.role === 'client_viewer') {
+    showNotif('⚠️ Viewers cannot add construction zones', true, 3000);
+    return;
+  }
   if(findingsTool){ startFindingsTool(); }
   constrTool = !constrTool;
   document.getElementById('btn-cz').classList.toggle('on', constrTool);
@@ -897,29 +973,79 @@ function startConstrTool(){
 window.startConstrTool = startConstrTool;
 
 function onConstrMapClick(e){
+  if (currentUser && currentUser.role === 'client_viewer') {
+    showNotif('⚠️ Viewers cannot add construction zones', true, 3000);
+    return;
+  }
   constrTool = false;
   document.getElementById('btn-cz').classList.remove('on');
   map.getContainer().style.cursor = '';
-  const cz = { czId: Date.now()+'_cz', lat: e.latlng.lat, lng: e.latlng.lng };
-  constrZones.push(cz);
-  saveConstrZones();
-  renderConstrZone(cz);
-  showNotif('🏗 Construction zone placed');
+
+  const lat = Number(e.latlng.lat), lng = Number(e.latlng.lng);
+  // Confirm the clicked coordinates before saving
+  if(!confirm('Place construction zone at:\n' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' ?')){
+    return;
+  }
+
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Creating construction zone...', false, 0);
+
+  fetch('/api/zones', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    },
+    body: JSON.stringify({
+      siteId: currentSiteId,
+      lat: lat,
+      lng: lng
+    })
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to create zone');
+    return res.json();
+  })
+  .then(data => {
+    loadConstrZones();
+    showNotif('🏗 Construction zone placed');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to place construction zone', true, 3000);
+  });
 }
 
 function deleteConstrZone(czId){
+  if (currentUser && currentUser.role === 'client_viewer') {
+    showNotif('⚠️ Viewers cannot delete construction zones', true, 3000);
+    return;
+  }
   if(!confirm('Remove this construction zone?')) return;
-  constrZones = constrZones.filter(c=>c.czId!==czId);
-  saveConstrZones();
-  renderAllConstrZones();
-  showNotif('🗑 Construction zone removed');
+  
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Removing construction zone...', false, 0);
+  
+  fetch(`/api/zones/${encodeURIComponent(czId)}?siteId=${encodeURIComponent(currentSiteId)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to delete zone');
+    loadConstrZones();
+    showNotif('🗑 Construction zone removed');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to remove construction zone', true, 3000);
+  });
 }
 window.deleteConstrZone = deleteConstrZone;
 
 // ── Construction zone diamond icon SVG ────────────────────────────
-// 28×28 diamond: left half black, right half yellow
 function makeConstrIcon(){
-  // Aspect ratio of cons.png ≈ 1.207 (wider than tall). Display 60×50 (halved).
   const w = 60, h = 50;
   const html = `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto;cursor:pointer">
     <img src="${CONSTR_MAP_ICON_DATA}" width="${w}" height="${h}" style="display:block;user-select:none" alt="Construction zone">
@@ -940,20 +1066,8 @@ function renderConstrZone(cz){
 function renderAllConstrZones(){
   if(!constrLayer) return;
   constrLayer.clearLayers();
-  if(window._hideConstr) return;          // toggle: hide construction icons
+  if(window._hideConstr) return;
   constrZones.forEach(cz=> renderConstrZone(cz));
-}
-
-function saveConstrZones(){
-  window._ptConstrZones = constrZones;
-  try{ localStorage.setItem(LS_CZ_KEY, JSON.stringify(constrZones)); }catch(e){}
-}
-
-function loadConstrZones(){
-  try{
-    const saved = JSON.parse(localStorage.getItem(LS_CZ_KEY)||'[]');
-    if(Array.isArray(saved)){ constrZones = saved; window._ptConstrZones = constrZones; renderAllConstrZones(); }
-  }catch(e){}
 }
 
 function onFindingsMapClick(e){
@@ -966,7 +1080,9 @@ function onFindingsMapClick(e){
   document.getElementById('fi-photo-preview').innerHTML = '';
   document.getElementById('fi-lbl').value = '';
   document.getElementById('fi-notes').value = '';
-  document.getElementById('fi-coords').value = '';
+  // Bind the clicked point into the GPS field so it's visible/editable in the modal
+  document.getElementById('fi-coords').value =
+    e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
   document.getElementById('fi-escalated').value = '';
   document.getElementById('fi-date').value = new Date().toISOString().slice(0,10);
   // Auto-set parcel to nearest
@@ -976,8 +1092,10 @@ function onFindingsMapClick(e){
     console.log('📍 Auto-selected parcel:', nearestParcel.name, 'at', nearestParcel.quad);
   }
   setFiStat('open', document.getElementById('sb-open'));
-  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('sel', b.dataset.id === 'stp_trench'));
-  selectedCat = 'stp_trench';
+  // Default to the first API-provided category (falls back to stp_trench)
+  const defCat = (CATS.find(c=>c.id==='stp_trench') || CATS[0] || {id:'stp_trench'}).id;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('sel', b.dataset.id === defCat));
+  selectedCat = defCat;
   document.getElementById('m-fi').style.display = 'flex';
 }
 
@@ -1024,7 +1142,11 @@ function editVisit(locId, visitId){
   // Pre-fill photos from the visit
   pendingPhotos = [...(visit.photos||[])];
   renderPhotoPreview();
-  document.getElementById('fi-coords').value = '';
+  // Bind the finding's GPS coordinates (from the API) into the input
+  document.getElementById('fi-coords').value =
+    (loc.lat != null && loc.lng != null)
+      ? Number(loc.lat).toFixed(6) + ', ' + Number(loc.lng).toFixed(6)
+      : '';
   document.getElementById('fi-lbl').value   = visit.label  || '';
   document.getElementById('fi-notes').value  = visit.notes  || '';
   document.getElementById('fi-escalated').value = visit.escalated || '';
@@ -1083,8 +1205,18 @@ function handleFiPhotos(input){
     const reader = new FileReader();
     reader.onload = e => {
       compressPhoto(e.target.result, compressed => {
-        pendingPhotos.push(compressed);
-        renderPhotoPreview();
+        showNotif('⏳ Uploading photo...', false, 0);
+        const blob = dataURLtoBlob(compressed);
+        uploadPhotoToServer(blob)
+          .then(res => {
+            pendingPhotos.push(res.url); 
+            renderPhotoPreview();
+            showNotif('✅ Photo uploaded');
+          })
+          .catch(err => {
+            console.error(err);
+            showNotif('❌ Photo upload failed', true, 3000);
+          });
       });
     };
     reader.readAsDataURL(file);
@@ -1143,6 +1275,11 @@ function parseCoords(str){
   return null;
 }
 function saveFinding(){
+  if (currentUser && currentUser.role === 'client_viewer') {
+    showNotif('⚠️ Viewers cannot modify findings', true, 3000);
+    return;
+  }
+
   const lbl   = document.getElementById('fi-lbl').value.trim();
   const notes = document.getElementById('fi-notes').value.trim();
   const date  = document.getElementById('fi-date').value;
@@ -1151,26 +1288,53 @@ function saveFinding(){
 
   const escalated = (document.getElementById('fi-escalated').value || '').trim() || null;
 
-  const visit = {
-    date, cat:selectedCat, status:selectedStat,
-    label:lbl, notes, escalated, photos:[...pendingPhotos],
-    id: Date.now()+'_fi'
+  if (!date) {
+    showNotif('⚠️ Date of inspection is required', true, 3000);
+    return;
+  }
+
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Saving finding...', false, 0);
+
+  const visitPayload = {
+    visitDate: date,
+    categoryId: categoryLabelToId[CATEGORY_MAP[selectedCat]] || categoryLabelToId['Other'],
+    label: lbl,
+    notes: notes,
+    escalatedToId: escalationLabelToId[escalated] || escalationLabelToId['Not assigned'],
+    statusId: statusLabelToId[STATUS_MAP[selectedStat]] || statusLabelToId['1st Offense'],
+    photos: pendingPhotos
   };
 
-  if(editingVisitId && editingLocId){
-    // Update existing visit in place
-    const loc = findings.find(f=>f.locId===editingLocId);
-    if(loc){
-      const idx = loc.visits.findIndex(v=>v.id===editingVisitId);
-      if(idx>=0){ visit.id = editingVisitId; loc.visits[idx] = visit; }
-    }
-    editingVisitId = null;
-  } else if(editingLocId){
-    // Add visit to existing location
-    const loc = findings.find(f=>f.locId===editingLocId);
-    if(loc){ loc.visits.push(visit); loc.visits.sort((a,b)=>a.date!==b.date?(a.date>b.date?-1:1):(parseInt(b.id)>parseInt(a.id)?1:-1)); }
+  let savePromise;
+
+  if (editingVisitId && editingLocId) {
+    savePromise = fetch(`/api/findings/${encodeURIComponent(editingLocId)}/visits/${encodeURIComponent(editingVisitId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ siteId: currentSiteId, ...visitPayload })
+    })
+    .then(res => {
+      if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error('Failed to update visit');
+    });
+  } else if (editingLocId) {
+    savePromise = fetch(`/api/findings/${encodeURIComponent(editingLocId)}/visits`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ siteId: currentSiteId, ...visitPayload })
+    })
+    .then(res => {
+      if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error('Failed to add visit');
+    });
   } else {
-    // New location — use pasted coords or map click
     const parsedLL = coordsRaw ? parseCoords(coordsRaw) : null;
     const ll = parsedLL || (pendingFindingLL ? {lat:pendingFindingLL.lat, lng:pendingFindingLL.lng} : null);
     if(!ll){
@@ -1181,52 +1345,129 @@ function saveFinding(){
       showNotif('⚠️ Could not read those coordinates — try: 29.9612, 30.9874', true, 4000);
       return;
     }
-    const locId = Date.now()+'_loc';
-    const maxRef = findings.reduce((mx,f)=>{ const n=parseInt(f.refNum,10)||0; return n>mx?n:mx; }, 0);
-    const nextRef = String(maxRef + 1).padStart(3,'0');
-    // Auto-assign parcel if not manually selected
+    
     const nearestP = window._nearestParcel ? window._nearestParcel(ll.lat, ll.lng) : null;
     const assignedParcel = parcel || (nearestP ? nearestP.name : null);
-    if(nearestP) console.log('🔍 Clicked at', ll.lat.toFixed(5), ll.lng.toFixed(5), '→ nearest parcel:', nearestP.name);
-    findings.push({ locId, lat:ll.lat, lng:ll.lng, refNum:nextRef, parcel:assignedParcel, visits:[visit] });
+    
+    const pObj = parcels.find(p => p.parcel_name === assignedParcel);
+    const parcelId = pObj ? pObj.id : null;
+    
+    const maxRef = findings.reduce((mx,f)=>{ const n=parseInt(f.refNum,10)||0; return n>mx?n:mx; }, 0);
+    const nextRef = String(maxRef + 1).padStart(3,'0');
+
+    const payload = {
+      siteId: currentSiteId,
+      lat: Number(ll.lat),
+      lng: Number(ll.lng),
+      parcel_id: parcelId,
+      ref_num: nextRef,
+      visit: visitPayload
+    };
+
+    savePromise = fetch('/api/findings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => {
+      if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error('Failed to create finding');
+    });
   }
 
-  // Close modal first — always, regardless of render outcome
-  document.getElementById('m-fi').style.display = 'none';
-  findingsTool = false;
-  if(document.getElementById('btn-fi')) document.getElementById('btn-fi').classList.remove('on');
-  if(typeof map !== 'undefined' && map) map.getContainer().style.cursor = '';
-  pendingFindingLL = null;
-  editingLocId = null;
-  saveFindings();
-  try{ renderAllFindings(); }catch(e){ console.error('Render error:',e); }
-  showNotif('✅ Finding saved');
+  savePromise
+  .then(() => {
+    document.getElementById('m-fi').style.display = 'none';
+    findingsTool = false;
+    if(document.getElementById('btn-fi')) document.getElementById('btn-fi').classList.remove('on');
+    if(typeof map !== 'undefined' && map) map.getContainer().style.cursor = '';
+    pendingFindingLL = null;
+    editingLocId = null;
+    editingVisitId = null;
+    
+    loadFindings();
+    showNotif('✅ Finding saved');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to save finding', true, 3000);
+  });
 }
 window.saveFinding = saveFinding;
 
 // ── Delete visit ───────────────────────────────────────────────────
 function deleteVisit(locId, visitId){
+  if (currentUser && currentUser.role === 'client_viewer') {
+    showNotif('⚠️ Viewers cannot delete visits', true, 3000);
+    return;
+  }
+  
+  if(!confirm('Are you sure you want to delete this visit? This action cannot be undone.')) return;
+
   const loc = findings.find(f=>f.locId===locId);
   if(!loc) return;
-  loc.visits = loc.visits.filter(v=>v.id!==visitId);
-  if(loc.visits.length === 0){
-    findings = findings.filter(f=>f.locId!==locId);
-    // refNums are intentionally NOT renumbered — gaps are preserved
+  
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Deleting visit...', false, 0);
+
+  let deletePromise;
+  if(loc.visits.length === 1){
+    deletePromise = fetch(`/api/findings/${encodeURIComponent(locId)}?siteId=${encodeURIComponent(currentSiteId)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+  } else {
+    deletePromise = fetch(`/api/findings/${encodeURIComponent(locId)}/visits/${encodeURIComponent(visitId)}?siteId=${encodeURIComponent(currentSiteId)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
   }
-  saveFindings(); renderAllFindings(); map.closePopup();
-  showNotif('🗑 Finding removed');
+
+  deletePromise
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Delete failed');
+    loadFindings();
+    map.closePopup();
+    showNotif('🗑 Visit deleted');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to delete visit', true, 3000);
+  });
 }
 window.deleteVisit = deleteVisit;
 
-// ── Clear all findings ─────────────────────────────────────────────
 function clearAllFindings(){
+  if (currentUser && currentUser.role !== 'admin') {
+    showNotif('⚠️ Admins only: cannot clear all findings', true, 3000);
+    return;
+  }
+  
   if(!findings.length){ showNotif('⚠️ No findings to clear', true, 2000); return; }
   if(!confirm(`Clear all ${findings.length} finding(s)? This cannot be undone.`)) return;
-  findings = [];
-  saveFindings();
-  renderAllFindings();
-  map.closePopup();
-  showNotif('🗑 All findings cleared');
+
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Clearing findings...', false, 0);
+
+  fetch(`/api/findings?siteId=${encodeURIComponent(currentSiteId)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to clear findings');
+    loadFindings();
+    map.closePopup();
+    showNotif('🗑 All findings cleared');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to clear findings', true, 3000);
+  });
 }
 window.clearAllFindings = clearAllFindings;
 
@@ -1327,32 +1568,42 @@ function buildPopup(loc){
   const latest = loc.visits[0];
   const stat = STAT_CFG[latest.status] || STAT_CFG.open;
   const cat  = CATS.find(c=>c.id===latest.cat) || CATS[CATS.length-1];
+  
+  const isViewer = currentUser && currentUser.role === 'client_viewer';
 
   let timelineHTML = loc.visits.map(v => {
     const photos = v.photos || [];
     const vs = STAT_CFG[v.status]||STAT_CFG.open;
     const vc = CATS.find(c=>c.id===v.cat)||CATS[CATS.length-1];
-    // Blob URLs are short strings — safe to embed directly in src attribute
     const photosHTML = photos.map((p, pi) => {
       const blobUrl = window._photoUrls[(v.id||'v')+'_'+pi] || p;
       return `<img src="${blobUrl}" class="fi-popup-photo" title="Click to enlarge" style="width:60px;height:45px;object-fit:cover;border-radius:3px;cursor:pointer;border:1px solid #ddd">`;
     }).join('');
+    
+    const actionButtons = isViewer ? '' : `
+      <button class="fi-del-btn" onclick="editVisit('${loc.locId}','${v.id}')">✏ edit</button>
+      <button class="fi-del-btn" onclick="deleteVisit('${loc.locId}','${v.id}')">✕ delete</button>
+    `;
+    
     return `<div class="fi-tl-entry">
       <div class="fi-tl-date">${v.date} — ${vc.label}</div>
       <span class="fi-tl-status" style="background:${vs.color}">${vs.emoji} ${vs.label}</span>
-      <button class="fi-del-btn" onclick="editVisit('${loc.locId}','${v.id}')">✏ edit</button>
-      <button class="fi-del-btn" onclick="deleteVisit('${loc.locId}','${v.id}')">✕ delete</button>
+      ${actionButtons}
       ${v.notes ? `<div class="fi-tl-note">${v.notes}</div>` : ''}
       ${v.escalated ? `<div class="fi-tl-note" style="color:#7C3AED;font-weight:600">➜ ${v.escalated}</div>` : ''}
       ${photosHTML ? `<div class="fi-tl-photos">${photosHTML}</div>` : ''}
     </div>`;
   }).join('');
 
+  const addVisitButton = isViewer ? '' : `
+    <button class="fi-add-btn" onclick="addVisitToLocation('${loc.locId}')">+ Add New Visit</button>
+  `;
+
   return `<div class="fi-popup">
     <div class="fi-pop-hdr" style="background:${stat.color}">#${parseInt(loc.refNum||'0',10)||loc.refNum||'?'} · ${cat.label} — ${latest.label||''}</div>
     <div class="fi-pop-body">
       <div class="fi-timeline">${timelineHTML}</div>
-      <button class="fi-add-btn" onclick="addVisitToLocation('${loc.locId}')">+ Add New Visit</button>
+      ${addVisitButton}
     </div>
   </div>`;
 }
@@ -1432,45 +1683,533 @@ async function loadPhotosFromIdb(findingsArr){
   }catch(e){ console.warn('IDB photo load failed:', e); }
 }
 
-function saveFindings(){
-  window._ptFindings = findings;
-  // Text to localStorage (no photos)
-  try{
-    const slim = findings.map(f=>({...f, visits: f.visits.map(v=>({...v, photos:[]}))}));
-    localStorage.setItem(LS_KEY, JSON.stringify(slim));
-  }catch(e){ console.warn('localStorage save failed:', e); }
-  // Photos to IndexedDB (async, fire-and-forget)
-  savePhotosToIdb(findings);
+function saveFindings() {
+  // Replaced by granular REST calls
 }
 
 function loadFindings(){
-  try{
-    const saved = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
-    if(!Array.isArray(saved) || saved.length === 0) return;
-    // Load text first, then merge photos from IDB, then render
-    loadPhotosFromIdb(saved).then(() => {
-      findings = saved;
-      window._ptFindings = findings;
-      renderAllFindings();
+  if (!currentSiteId) return;
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Loading findings...', false, 0);
+  fetch('/api/findings?siteId=' + currentSiteId, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to fetch findings');
+    return res.json();
+  })
+  .then(data => {
+    findings = data.findings.map(f => {
+      const pObj = parcels.find(p => p.id === f.parcel_id);
+      const parcelName = pObj ? pObj.parcel_name : '';
+      
+      return {
+        locId: f.id,
+        lat: Number(f.lat),
+        lng: Number(f.lng),
+        refNum: f.ref_num,
+        parcel: parcelName,
+        visits: f.visits.map(v => {
+          const catLabel = categoryIdToLabel[v.categoryId];
+          const legacyCat = Object.keys(CATEGORY_MAP).find(k => CATEGORY_MAP[k] === catLabel) || 'other';
+          
+          const statusLabel = statusIdToLabel[v.statusId];
+          const legacyStatus = Object.keys(STATUS_MAP).find(k => STATUS_MAP[k] === statusLabel) || 'open';
+          
+          return {
+            id: v.id,
+            date: v.visitDate,
+            cat: legacyCat,
+            status: legacyStatus,
+            label: v.label || '',
+            notes: v.notes || '',
+            escalated: escalationIdToLabel[v.escalatedToId] || '',
+            photos: v.photos || []
+          };
+        })
+      };
     });
-  }catch(e){}
+    window._ptFindings = findings;
+    renderAllFindings();
+    showNotif('✅ Findings loaded');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to load findings', true, 3000);
+  });
 }
 
+function saveConstrZones() {
+  // Replaced by granular REST calls
+}
 
-
-// ── Boot ───────────────────────────────────────────────────────────
-window._importFindingsData = function(arr, czArr){
-  findings = arr;
-  window._ptFindings = findings;
-  saveFindings();          // saves text (slim) to localStorage + photos to IndexedDB
-  renderAllFindings();
-  if(Array.isArray(czArr)){
-    constrZones = czArr;
-    saveConstrZones();
+function loadConstrZones(){
+  if (!currentSiteId) return;
+  const token = localStorage.getItem('pt_admin_token');
+  fetch('/api/zones?siteId=' + currentSiteId, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to fetch construction zones');
+    return res.json();
+  })
+  .then(data => {
+    constrZones = data.zones.map(z => ({
+      czId: z.id,
+      lat: Number(z.lat),
+      lng: Number(z.lng)
+    }));
     renderAllConstrZones();
+  })
+  .catch(err => {
+    console.error(err);
+  });
+}
+
+// ── Authentication & Boot Lifecycle ──────────────────────────────────
+function showLogin() {
+  document.getElementById('login-container').style.display = 'flex';
+  document.getElementById('app-container').style.display = 'none';
+}
+
+function hideLogin() {
+  document.getElementById('login-container').style.display = 'none';
+  document.getElementById('app-container').style.display = 'block';
+}
+
+function handleUnauthorized() {
+  localStorage.removeItem('pt_admin_token');
+  showLogin();
+}
+
+function logout() {
+  const token = localStorage.getItem('pt_admin_token');
+  fetch('/api/auth/logout', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .finally(() => {
+    handleUnauthorized();
+    window.location.reload();
+  });
+}
+window.logout = logout;
+
+function login() {
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const errDiv = document.getElementById('login-error');
+  errDiv.style.display = 'none';
+  
+  if (!u || !p) {
+    errDiv.textContent = 'Please enter both username and password';
+    errDiv.style.display = 'block';
+    return;
   }
+  
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  
+  fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: u, password: p })
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(data => {
+        throw new Error(data.error || 'Invalid credentials');
+      });
+    }
+    return res.json();
+  })
+  .then(data => {
+    localStorage.setItem('pt_admin_token', data.token);
+    currentUser = data.user;
+    hideLogin();
+    bootApp();
+  })
+  .catch(err => {
+    errDiv.textContent = err.message;
+    errDiv.style.display = 'block';
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.textContent = 'Login';
+  });
+}
+window.login = login;
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('login-container').style.display !== 'none') {
+    login();
+  }
+});
+
+function checkAuthAndStart() {
+  const token = localStorage.getItem('pt_admin_token');
+  if (!token) {
+    showLogin();
+    return;
+  }
+  
+  fetch('/api/auth/me', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Unauthorized');
+    return res.json();
+  })
+  .then(user => {
+    currentUser = user.user;
+    hideLogin();
+    bootApp();
+  })
+  .catch(err => {
+    console.error(err);
+    handleUnauthorized();
+  });
+}
+
+function bootApp() {
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Initializing dashboard...', false, 0);
+  
+  fetch('/api/references', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => res.json())
+  .then(refData => {
+    refData.categories.forEach(c => {
+      categoryLabelToId[c.label] = c.id;
+      categoryIdToLabel[c.id] = c.label;
+    });
+    refData.statuses.forEach(s => {
+      statusLabelToId[s.label] = s.id;
+      statusIdToLabel[s.id] = s.label;
+    });
+    refData.escalations.forEach(e => {
+      escalationLabelToId[e.label] = e.id;
+      escalationIdToLabel[e.id] = e.label;
+    });
+
+    // ── Bind category buttons from the API ──────────────────────────
+    // Rebuild CATS from the DB rows so the popup grid reflects the API
+    // (labels, colors, order). Categories bind POSITIONALLY to the legacy
+    // ids (the CATEGORY_MAP key order) so renamed DB labels still work; we
+    // also remap CATEGORY_MAP itself so incoming-finding conversion and the
+    // save path resolve against the real DB labels — not the hardcoded ones.
+    if (Array.isArray(refData.categories) && refData.categories.length) {
+      const _legacyCatIds = Object.keys(CATEGORY_MAP);   // ['stp_trench', …]
+      const _prevById = {}; CATS.forEach(c => _prevById[c.id] = c);
+      const _apiCats = refData.categories.map((c, i) => {
+        const legacyId = _legacyCatIds[i] || 'other';
+        CATEGORY_MAP[legacyId] = c.label;                // legacy id → real DB label
+        const prev = _prevById[legacyId];
+        return {
+          id: legacyId,
+          label: c.label,
+          color: c.color || (prev ? prev.color : '#374151'),
+        };
+      });
+      CATS.length = 0;
+      _apiCats.forEach(c => CATS.push(c));
+      window._CATS = CATS;
+    }
+
+    // ── Bind status buttons from the API ────────────────────────────
+    // The app is hardwired to 3 legacy status ids ('open' | 'repeat' |
+    // 'resolved'), driving static buttons, marker/PDF colors and counts.
+    // The DB may rename the labels, so we bind POSITIONALLY by sort_order
+    // (already ORDER BY sort_order ASC): 1st→open, 2nd→repeat, 3rd→resolved.
+    // We remap STATUS_MAP itself so every downstream lookup (incoming-finding
+    // conversion, save path) uses the real DB labels — not the hardcoded ones.
+    if (Array.isArray(refData.statuses) && refData.statuses.length) {
+      const _legacyStatus = ['open','repeat','resolved'];
+      refData.statuses.slice(0, 3).forEach((s, i) => {
+        const legacyId = _legacyStatus[i];
+        STATUS_MAP[legacyId] = s.label;              // legacy id → real DB label
+        const prev = STAT_CFG[legacyId] || {};
+        STAT_CFG[legacyId] = {
+          label: s.label || prev.label,
+          color: s.color || prev.color,
+          emoji: s.emoji || prev.emoji,
+        };
+      });
+    }
+
+    return fetch('/api/sites', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+  })
+  .then(res => res.json())
+  .then(sitesData => {
+    sites = sitesData.data || [];
+    if (sites.length === 0) {
+      showNotif('❌ No assigned sites found', true, 5000);
+      return;
+    }
+    
+    const picker = document.getElementById('site-selector');
+    picker.innerHTML = '';
+    sites.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      picker.appendChild(opt);
+    });
+    
+    currentSiteId = sites[0].id;
+    
+    const userRole = currentUser ? currentUser.role : 'client_viewer';
+    applyPermissions(userRole);
+    
+    if (typeof map === 'undefined' || !map) {
+      init();
+      initFindings();
+    } else {
+      changeSite(currentSiteId);
+    }
+    
+    buildEscalationSelect();
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Failed to initialize app', true, 5000);
+  });
+}
+
+function applyPermissions(role) {
+  const btnFi = document.getElementById('btn-fi');
+  const btnCz = document.getElementById('btn-cz');
+  const btnExport = document.getElementById('btn-export');
+  const btnImport = document.querySelector('button[onclick="triggerImport()"]');
+  const btnUpdateParcels = document.querySelector('button[onclick*="parcel-xlsx-input"]');
+  
+  if (role === 'client_viewer') {
+    if (btnFi) btnFi.style.display = 'none';
+    if (btnCz) btnCz.style.display = 'none';
+    if (btnExport) btnExport.style.display = 'none';
+    if (btnImport) btnImport.style.display = 'none';
+    if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
+  } else if (role === 'engineer') {
+    if (btnFi) btnFi.style.display = '';
+    if (btnCz) btnCz.style.display = '';
+    if (btnExport) btnExport.style.display = 'none';
+    if (btnImport) btnImport.style.display = 'none';
+    if (btnUpdateParcels) btnUpdateParcels.style.display = '';
+  } else if (role === 'admin') {
+    if (btnFi) btnFi.style.display = '';
+    if (btnCz) btnCz.style.display = '';
+    if (btnExport) btnExport.style.display = '';
+    if (btnImport) btnImport.style.display = '';
+    if (btnUpdateParcels) btnUpdateParcels.style.display = '';
+  }
+}
+
+function buildEscalationSelect() {
+  const select = document.getElementById('fi-escalated');
+  if(!select) return;
+  const currentVal = select.value;
+  select.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '— Not assigned —';
+  select.appendChild(blank);
+  
+  Object.keys(escalationLabelToId).forEach(lbl => {
+    if (lbl === 'Not assigned') return;
+    const opt = document.createElement('option');
+    opt.value = lbl;
+    opt.textContent = lbl;
+    select.appendChild(opt);
+  });
+  if (currentVal) select.value = currentVal;
+}
+
+function changeSite(siteId) {
+  currentSiteId = siteId;
+  const siteObj = sites.find(s => s.id === siteId);
+  if (siteObj && map) {
+    const lat = siteObj.map_center_lat ? Number(siteObj.map_center_lat) : 27.3949;
+    const lng = siteObj.map_center_lng ? Number(siteObj.map_center_lng) : 33.6782;
+    const zoom = siteObj.default_zoom ? Number(siteObj.default_zoom) : 14;
+    map.setView([lat, lng], zoom);
+  }
+  
+  loadParcels().then(() => {
+    loadFindings();
+    loadConstrZones();
+  });
+}
+window.changeSite = changeSite;
+
+function dataURLtoBlob(dataurl) {
+  var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+      bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+  while(n--){
+      u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], {type:mime});
+}
+
+function uploadPhotoToServer(blob) {
+  const formData = new FormData();
+  formData.append('files', blob, `photo-${Date.now()}.jpg`);
+  
+  const token = localStorage.getItem('pt_admin_token');
+  return fetch('/api/findings/photos?siteId=' + currentSiteId, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + token
+    },
+    body: formData
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  })
+  .then(data => {
+    return { key: data.keys[0], url: data.urls[0] };
+  });
+}
+
+window._importFindingsData = function(arr, czArr){
+  if (currentUser && currentUser.role !== 'admin') {
+    showNotif('⚠️ Admin role required to import backups', true, 3000);
+    return;
+  }
+  
+  const token = localStorage.getItem('pt_admin_token');
+  showNotif('⏳ Clearing existing data on server...', false, 0);
+  
+  fetch('/api/findings?siteId=' + currentSiteId, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) throw new Error('Failed to clear findings');
+    
+    showNotif('⏳ Uploading imported findings to server...', false, 0);
+    
+    const promises = arr.map(loc => {
+      const visits = [...(loc.visits || [])];
+      if (!visits.length) return Promise.resolve();
+      
+      const [first, ...rest] = visits;
+      
+      const uploadPhotosPromise = Promise.all((first.photos || []).map(p => {
+        if (p.startsWith('data:')) {
+          return uploadPhotoToServer(dataURLtoBlob(p)).then(r => r.key);
+        }
+        return Promise.resolve(p);
+      }));
+      
+      return uploadPhotosPromise.then(firstPhotos => {
+        const pObj = parcels.find(p => p.parcel_name === loc.parcel);
+        const parcelId = pObj ? pObj.id : null;
+        
+        const payload = {
+          siteId: currentSiteId,
+          lat: Number(loc.lat),
+          lng: Number(loc.lng),
+          parcel_id: parcelId,
+          ref_num: loc.refNum,
+          visit: {
+            visitDate: first.date,
+            categoryId: categoryLabelToId[CATEGORY_MAP[first.cat]] || categoryLabelToId['Other'],
+            label: first.label || '',
+            notes: first.notes || '',
+            escalatedToId: escalationLabelToId[first.escalated] || escalationLabelToId['Not assigned'],
+            statusId: statusLabelToId[STATUS_MAP[first.status]] || statusLabelToId['1st Offense'],
+            photos: firstPhotos
+          }
+        };
+        
+        return fetch('/api/findings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(createdLoc => {
+          return rest.reduce((chain, v) => {
+            return chain.then(() => {
+              const uploadRestPhotos = Promise.all((v.photos || []).map(p => {
+                if (p.startsWith('data:')) {
+                  return uploadPhotoToServer(dataURLtoBlob(p)).then(r => r.key);
+                }
+                return Promise.resolve(p);
+              }));
+              
+              return uploadRestPhotos.then(restPhotos => {
+                const visitPayload = {
+                  siteId: currentSiteId,
+                  visitDate: v.date,
+                  categoryId: categoryLabelToId[CATEGORY_MAP[v.cat]] || categoryLabelToId['Other'],
+                  label: v.label || '',
+                  notes: v.notes || '',
+                  escalatedToId: escalationLabelToId[v.escalated] || escalationLabelToId['Not assigned'],
+                  statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId['1st Offense'],
+                  photos: restPhotos
+                };
+                
+                return fetch('/api/findings/' + encodeURIComponent(createdLoc.id) + '/visits', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                  },
+                  body: JSON.stringify(visitPayload)
+                });
+              });
+            });
+          }, Promise.resolve());
+        });
+      });
+    });
+    
+    return Promise.all(promises);
+  })
+  .then(() => {
+    if (Array.isArray(czArr)) {
+      const czPromises = czArr.map(cz => {
+        return fetch('/api/zones', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            siteId: currentSiteId,
+            lat: Number(cz.lat),
+            lng: Number(cz.lng)
+          })
+        });
+      });
+      return Promise.all(czPromises);
+    }
+  })
+  .then(() => {
+    loadFindings();
+    loadConstrZones();
+    showNotif('✅ JSON backup imported successfully');
+  })
+  .catch(err => {
+    console.error(err);
+    showNotif('❌ Backup import failed', true, 5000);
+  });
 };
-window.addEventListener('load', initFindings);
+
+window.addEventListener('load', checkAuthAndStart);
 })();
 </script>
 
@@ -2710,5 +3449,6 @@ async function exportFindingsPDF(sortBy='number'){
 window.exportFindingsPDF = exportFindingsPDF;
 
 </script>
+</div>
 </body>
 </html>
