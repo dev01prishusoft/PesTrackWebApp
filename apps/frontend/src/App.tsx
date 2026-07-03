@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ConfirmProvider } from './components/ConfirmDialog';
-import { LoginPage } from './pages/LoginPage';
-import { FrontendPage } from './pages/FrontendPage';
+// import { LoginPage } from './pages/LoginPage';
+// import { FrontendPage } from './pages/FrontendPage';
 import { AdminLayout } from './admin/AdminLayout';
 import { UsersPage } from './admin/pages/UsersPage';
 import { SitesPage } from './admin/pages/SitesPage';
@@ -24,7 +24,7 @@ function EntryRouter() {
   const { user, loading } = useAuth();
   
   if (loading) return null;
-  if (!user) return <Navigate to="/frontend/login" replace />;
+  if (!user) return <Navigate to="/admin/login" replace />;
   if (user.role === 'admin') return <Navigate to="/admin/users" replace />;
   return <Navigate to="/frontend/dashboard" replace />;
 }
@@ -59,17 +59,17 @@ function NavigationRouter() {
     <Routes>
       <Route path="/" element={<EntryRouter />} />
       
-      <Route path="/frontend/login" element={<LoginPage />} />
+      {/* <Route path="/frontend/login" element={<LoginPage />} /> */}
       <Route path="/admin/login" element={<LoginPage />} />
       
-      <Route 
+      {/* <Route 
         path="/frontend/dashboard" 
         element={
           <RequireAuth>
             <FrontendPage />
           </RequireAuth>
         } 
-      />
+      /> */}
       
       <Route 
         path="/admin" 
