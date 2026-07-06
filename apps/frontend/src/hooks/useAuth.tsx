@@ -47,11 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    // State-only: clearing the token + user lets RequireAuth redirect to the
+    // login route via React Router. Doing a hard window.location navigation here
+    // too would double-fire (client redirect, then full reload) and flash.
     clearToken();
     setUser(null);
-    // Send the user back to the admin login (this React app is the admin panel).
-    // A hard navigation guarantees a clean slate regardless of the current route.
-    window.location.assign('/admin/login');
   }
 
   return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;
