@@ -12,7 +12,7 @@ function slugify(name) {
     .replace(/^-+|-+$/g, '');
 }
 
-// Admins and client_viewers see all sites; engineers see only their assigned
+// Admins see all sites; engineers and client_viewers see only their assigned
 // sites. Supports pagination/sort/search; non-paginated callers still get `data`.
 async function listSites(req, res, next) {
   try {
@@ -21,9 +21,9 @@ async function listSites(req, res, next) {
 
     const conditions = [];
     const params = [];
-    // Admins and viewers see every site; only engineers are scoped to
-    // their assigned sites.
-    const seesAllSites = req.user.role === 'admin' || req.user.role === 'client_viewer';
+    // Only admins see every site; engineers and client_viewers are scoped
+    // to their assigned sites.
+    const seesAllSites = req.user.role === 'admin';
     if (!seesAllSites) {
       params.push(req.user.id);
       conditions.push(`s.id IN (SELECT site_id FROM user_sites WHERE user_id = $${params.length})`);

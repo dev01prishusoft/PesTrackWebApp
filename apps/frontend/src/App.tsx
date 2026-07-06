@@ -44,7 +44,7 @@ function RequireAuth({ children, requireAdmin }: { children: React.ReactNode; re
   }
 
   if (!user) {
-    return <Navigate to="/frontend/login" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
 
   if (requireAdmin && user.role !== 'admin') {

@@ -47,6 +47,10 @@ export interface AuditLog {
   action: string;
   table_name: string;
   record_id: string | null;
+  // Field-level snapshots (present for sites/users; used to show a readable
+  // record label instead of a raw UUID). Shape varies by table.
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
   ip_address: string | null;
   created_at: string;
 }

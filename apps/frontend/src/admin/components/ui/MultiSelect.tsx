@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 
 interface MultiSelectProps {
@@ -19,10 +20,45 @@ export function MultiSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Fixed-position coords so the menu escapes any overflow-clipping ancestor
+  // (e.g. a scrollable modal body). Recomputed while open.
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number } | null>(null);
+
+  // Position the portal menu against the trigger. Chooses up/down based on the
+  // preferred direction but flips if there isn't room on that side.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    function place() {
+      const trigger = containerRef.current;
+      if (!trigger) return;
+      const r = trigger.getBoundingClientRect();
+      const menuH = menuRef.current?.offsetHeight ?? 260;
+      const gap = 6;
+      const spaceBelow = window.innerHeight - r.bottom;
+      const spaceAbove = r.top;
+      const openUp = openDirection === 'up'
+        ? spaceAbove > menuH + gap || spaceAbove > spaceBelow
+        : spaceBelow < menuH + gap && spaceAbove > spaceBelow;
+      const top = openUp ? r.top - menuH - gap : r.bottom + gap;
+      setMenuPos({ left: r.left, top, width: r.width });
+    }
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [isOpen, openDirection, selectedIds.length]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const t = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(t) &&
+        menuRef.current && !menuRef.current.contains(t)
+      ) {
         setIsOpen(false);
       }
     }
@@ -97,12 +133,18 @@ export function MultiSelect({
         />
       </div>
 
-      {isOpen && (
-        <div className={`absolute left-0 right-0 z-50 overflow-hidden rounded-xl border border-border bg-card shadow-lg flex flex-col ${
-          openDirection === 'up'
-            ? 'bottom-full mb-1.5'
-            : 'top-full mt-1.5'
-        }`}>
+      {isOpen && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            left: menuPos?.left ?? 0,
+            top: menuPos?.top ?? 0,
+            width: menuPos?.width ?? 'auto',
+            visibility: menuPos ? 'visible' : 'hidden',
+          }}
+          className="z-[60] overflow-hidden rounded-xl border border-border bg-card shadow-lg flex flex-col"
+        >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2 bg-muted/40">
             <Search size={14} className="text-muted-foreground shrink-0" />
             <input
@@ -166,7 +208,8 @@ export function MultiSelect({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

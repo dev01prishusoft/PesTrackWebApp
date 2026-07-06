@@ -53,4 +53,17 @@ describe('requireSiteAccess', () => {
     requireSiteAccess(get)({ user: { role: 'engineer', siteIds: [1, 2] }, params: { siteId: 2 } }, res, () => (nextCalled = true));
     expect(nextCalled).toBe(true);
   });
+
+  test('403 when client_viewer not assigned to site', () => {
+    const res = mockRes(); let nextCalled = false;
+    requireSiteAccess(get)({ user: { role: 'client_viewer', siteIds: [1] }, params: { siteId: 2 } }, res, () => (nextCalled = true));
+    expect(res.statusCode).toBe(403);
+    expect(nextCalled).toBe(false);
+  });
+
+  test('calls next when client_viewer assigned to site', () => {
+    const res = mockRes(); let nextCalled = false;
+    requireSiteAccess(get)({ user: { role: 'client_viewer', siteIds: [1, 2] }, params: { siteId: 2 } }, res, () => (nextCalled = true));
+    expect(nextCalled).toBe(true);
+  });
 });

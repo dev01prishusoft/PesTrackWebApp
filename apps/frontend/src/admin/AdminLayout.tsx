@@ -16,6 +16,7 @@ function AdminLayoutInner() {
   const confirm = useAdminConfirm();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -27,6 +28,9 @@ function AdminLayoutInner() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+
   if (!user) return null;
 
   const currentNav = NAV.find((n) => location.pathname.startsWith(n.path)) || NAV[0];
@@ -34,15 +38,29 @@ function AdminLayoutInner() {
 
   return (
     <div className="flex h-screen overflow-hidden text-slate-900 bg-white">
-      {/* Sidebar */}
+      {/* Mobile drawer backdrop */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar — off-canvas drawer on mobile, collapsible rail on desktop */}
       <aside
         className={cn(
-          'flex-shrink-0 bg-sidebar-bg text-sidebar-foreground flex flex-col sticky top-0 h-screen transition-[width] duration-200',
-          collapsed ? 'w-[72px]' : 'w-60'
+          'bg-sidebar-bg text-sidebar-foreground flex flex-col h-screen transition-transform duration-200',
+          // Mobile: fixed overlay that slides in/out
+          'fixed top-0 left-0 z-50 w-60 md:z-auto',
+          drawerOpen ? 'translate-x-0' : '-translate-x-full',
+          // Desktop: in-flow, always visible, collapsible width
+          'md:static md:translate-x-0 md:flex-shrink-0 md:sticky md:transition-[width]',
+          collapsed ? 'md:w-[72px]' : 'md:w-60'
         )}
       >
-        <div className={cn('flex items-center h-[60px] px-4 py-2 border-b border-sidebar-border', collapsed && 'justify-center px-2 py-2')}>
-          <img src={`${import.meta.env.BASE_URL}sotaico-logo.png`} alt="PesTrack" className={cn('w-full h-full object-contain transition-all', collapsed && 'object-left')} />
+        <div className={cn('flex items-center h-[60px] px-4 py-2 border-b border-sidebar-border', collapsed && 'md:justify-center md:px-2 md:py-2')}>
+          <img src={`${import.meta.env.BASE_URL}sotaico-logo.png`} alt="PesTrack" className={cn('w-full h-full object-contain transition-all', collapsed && 'md:object-left')} />
         </div>
         <nav className="p-3 flex flex-col gap-1 flex-1">
           {NAV.map(({ key, path, label, icon: Icon }) => {
@@ -54,14 +72,14 @@ function AdminLayoutInner() {
                 title={collapsed ? label : undefined}
                 className={cn(
                   'flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[9px] text-sm font-medium transition-colors whitespace-nowrap',
-                  collapsed && 'justify-center',
+                  collapsed && 'md:justify-center',
                   isActive
                     ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
                     : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                 )}
               >
                 <Icon size={18} className="shrink-0" />
-                {!collapsed && <span>{label}</span>}
+                <span className={cn(collapsed && 'md:hidden')}>{label}</span>
               </Link>
             );
           })}
@@ -70,16 +88,23 @@ function AdminLayoutInner() {
 
       {/* Content */}
       <div className="flex-1 min-w-0 flex flex-col bg-background">
-        <header className="h-[60px] bg-card border-b border-border flex items-center justify-between px-5 sticky top-0 z-20 shadow-sm">
-          <div className="flex items-center gap-3.5">
+        <header className="h-[60px] bg-card border-b border-border flex items-center justify-between px-4 sm:px-5 sticky top-0 z-20 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
             <button
-              onClick={() => setCollapsed((c) => !c)}
-              className="w-9 h-9 grid place-items-center rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+              onClick={() => {
+                // On mobile, toggle the drawer; on desktop, collapse the rail.
+                if (window.matchMedia('(min-width: 768px)').matches) {
+                  setCollapsed((c) => !c);
+                } else {
+                  setDrawerOpen((o) => !o);
+                }
+              }}
+              className="w-9 h-9 grid place-items-center rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0"
               aria-label="Toggle menu"
             >
               <Menu size={18} />
             </button>
-            <h1 className="text-lg font-bold m-0">{currentNav.label}</h1>
+            <h1 className="text-base sm:text-lg font-bold m-0 truncate">{currentNav.label}</h1>
           </div>
 
           <div className="relative" ref={menuRef}>
@@ -127,7 +152,7 @@ function AdminLayoutInner() {
         </header>
 
         <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <div className="w-full px-6 py-6 flex-1 min-h-0 flex flex-col">
+          <div className="w-full px-3 py-4 sm:px-6 sm:py-6 flex-1 min-h-0 flex flex-col">
             <Outlet />
           </div>
         </main>

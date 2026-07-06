@@ -4,6 +4,7 @@ import { DataTable } from '../components/DataTable';
 import { SearchInput } from '../components/SearchInput';
 import { useListState } from '../hooks/useListState';
 import { useAudit } from '../api/queries';
+import { cn } from '../lib/utils';
 import type { AuditLog } from '../lib/types';
 
 const selectCls =
@@ -39,22 +40,28 @@ export function AuditPage() {
       ),
     },
     { id: 'a.table_name', header: 'Table', accessorKey: 'table_name' },
-    { id: 'record', header: 'Record', accessorFn: (l) => l.record_id || '' },
+    // { id: 'record', header: 'Record Id', accessorFn: (l) => l.record_id || '' },
     { id: 'ip', header: 'IP', accessorFn: (l) => l.ip_address || '' },
   ], []);
 
   return (
     <div className="flex flex-col gap-5 flex-1 min-h-0 h-full">
-      <div className="flex items-center gap-3 flex-wrap">
-        <SearchInput value={ls.search} onChange={ls.changeSearch} placeholder="Search table, record, user…" />
-        <select className={selectCls} value={action} onChange={(e) => { setAction(e.target.value); ls.setPage(1); }}>
-          <option value="">All actions</option>
-          <option value="CREATE">CREATE</option>
-          <option value="UPDATE">UPDATE</option>
-          <option value="DELETE">DELETE</option>
-        </select>
-        <input className={selectCls} type="date" value={from} onChange={(e) => { setFrom(e.target.value); ls.setPage(1); }} />
-        <input className={selectCls} type="date" value={to} onChange={(e) => { setTo(e.target.value); ls.setPage(1); }} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:flex-wrap">
+        {/* Row 1 on mobile: search + action side by side */}
+        <div className="flex items-center gap-2 sm:contents">
+          <SearchInput value={ls.search} onChange={ls.changeSearch} placeholder="Search table, record, user…" />
+          <select className={cn(selectCls, 'flex-1 min-w-[120px] sm:flex-none')} value={action} onChange={(e) => { setAction(e.target.value); ls.setPage(1); }}>
+            <option value="">All actions</option>
+            <option value="CREATE">CREATE</option>
+            <option value="UPDATE">UPDATE</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+        {/* Row 2 on mobile: start + end date side by side */}
+        <div className="flex items-center gap-2 sm:contents">
+          <input className={cn(selectCls, 'flex-1 min-w-0 sm:flex-none')} type="date" value={from} onChange={(e) => { setFrom(e.target.value); ls.setPage(1); }} />
+          <input className={cn(selectCls, 'flex-1 min-w-0 sm:flex-none')} type="date" value={to} onChange={(e) => { setTo(e.target.value); ls.setPage(1); }} />
+        </div>
       </div>
       {isError && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{(error as Error).message}</div>}
       <DataTable

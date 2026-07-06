@@ -49,6 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     clearToken();
     setUser(null);
+    // Send the user back to the admin login (this React app is the admin panel).
+    // A hard navigation guarantees a clean slate regardless of the current route.
+    window.location.assign('/admin/login');
   }
 
   return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;

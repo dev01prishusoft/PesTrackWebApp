@@ -65,11 +65,11 @@ export function DataTable<T>({
                       key={h.id}
                       onClick={sortable ? () => toggleSort(h.column.id) : undefined}
                       className={cn(
-                        isActionsCol && 'text-right',
+                        isActionsCol && 'text-right w-px whitespace-nowrap',
                         sortable && 'cursor-pointer select-none hover:text-foreground'
                       )}
                     >
-                      <span className="inline-flex items-center gap-1">
+                      <span className={cn('inline-flex items-center gap-1', isActionsCol && 'justify-end')}>
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         {active &&
                           (sortState.order === 'asc' ? (
@@ -109,7 +109,7 @@ export function DataTable<T>({
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className={cn(cell.column.id === 'actions' && 'text-right')}
+                      className={cn(cell.column.id === 'actions' && 'text-right w-px whitespace-nowrap')}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

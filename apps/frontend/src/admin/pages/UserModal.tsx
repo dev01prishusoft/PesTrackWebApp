@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { X, KeyRound, Eye, EyeOff, Search, ChevronDown } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { MultiSelect } from '../components/ui/MultiSelect';
 import {
   useCreateUser, useUpdateUser, useResetPassword, useAllSites,
 } from '../api/queries';
@@ -11,6 +12,9 @@ const inputCls =
 
 export function UserModal({ user, onClose }: { user: User | null; onClose: () => void }) {
   const editing = !!user;
+  // Editing an admin: role is locked and site assignment doesn't apply
+  // (admins have access to every site).
+  const isAdmin = editing && user?.role === 'admin';
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const resetPw = useResetPassword();
@@ -25,8 +29,10 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
   const { data: sites } = useAllSites();
   const [siteIds, setSiteIds] = useState<number[]>(user?.sites?.map(s => s.id) ?? []);
-  const [siteSearch, setSiteSearch] = useState('');
-  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
+  const siteOptions = useMemo(
+    () => (sites ?? []).map((s) => ({ id: s.id, name: s.name })),
+    [sites]
+  );
 
   // Password fields for creation
   const [password, setPassword] = useState('');
@@ -180,10 +186,16 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Role <span className="text-destructive">*</span></label>
-              <select className={inputCls} value={role} onChange={(e) => { setRole(e.target.value as User['role']); setFieldErrors(prev => ({ ...prev, role: '' })); }}>
+              <select
+                className={`${inputCls} ${isAdmin ? 'opacity-60 bg-muted cursor-not-allowed' : ''}`}
+                value={role}
+                onChange={(e) => { setRole(e.target.value as User['role']); setFieldErrors(prev => ({ ...prev, role: '' })); }}
+                disabled={isAdmin}
+              >
                 <option value="engineer">Engineer</option>
                 <option value="client_viewer">Client Viewer</option>
-                <option value="admin">Admin</option>
+                {/* Admin role is fixed for existing admins and cannot be created here. */}
+                {isAdmin && <option value="admin">Admin</option>}
               </select>
               {fieldErrors.role && <p className="text-destructive text-xs mt-1">{fieldErrors.role}</p>}
             </div>
@@ -270,71 +282,18 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
               </div>
             </div>
 
+            {!isAdmin && (
             <div className="sm:col-span-2 mt-2">
               <label className="block text-xs font-semibold text-muted-foreground mb-2">Assigned Sites</label>
-              <div className="relative">
-                <div
-                  className="flex items-center justify-between min-h-[40px] px-3 py-1.5 rounded-lg border border-input bg-card shadow-sm text-sm cursor-pointer"
-                  onClick={() => setSiteDropdownOpen(!siteDropdownOpen)}
-                >
-                  <div className="flex flex-wrap gap-1.5 flex-1 mr-2">
-                    {siteIds.length === 0 && <span className="text-muted-foreground py-0.5">Select sites...</span>}
-                    {sites?.filter(s => siteIds.includes(s.id)).map(site => (
-                      <span key={site.id} className="bg-primary/10 text-primary px-2 py-0.5 rounded flex items-center gap-1 text-xs font-medium">
-                        {site.name}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSiteIds(siteIds.filter(id => id !== site.id));
-                          }}
-                          className="hover:text-foreground hover:bg-primary/20 rounded-full p-0.5"
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <ChevronDown size={16} className="text-muted-foreground shrink-0" />
-                </div>
-                
-                {siteDropdownOpen && (
-                  <div className="absolute z-10 top-full mt-1 w-full bg-card border border-input rounded-lg shadow-lg overflow-hidden flex flex-col">
-                    <div className="p-2 border-b border-input flex items-center gap-2 text-muted-foreground">
-                      <Search size={14} className="shrink-0" />
-                      <input
-                        type="text"
-                        className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
-                        placeholder="Search sites..."
-                        value={siteSearch}
-                        onChange={(e) => setSiteSearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-[160px] overflow-y-auto p-1">
-                      {sites?.filter(s => s.name.toLowerCase().includes(siteSearch.toLowerCase())).map(site => (
-                        <label key={site.id} className="flex items-center gap-2 cursor-pointer text-sm text-foreground hover:bg-muted p-2 rounded-md">
-                          <input
-                            type="checkbox"
-                            checked={siteIds.includes(site.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) setSiteIds([...siteIds, site.id]);
-                              else setSiteIds(siteIds.filter(id => id !== site.id));
-                            }}
-                            className="rounded border-input text-primary focus:ring-primary/40"
-                          />
-                          {site.name}
-                        </label>
-                      ))}
-                      {sites?.filter(s => s.name.toLowerCase().includes(siteSearch.toLowerCase())).length === 0 && (
-                        <div className="text-muted-foreground text-xs p-3 text-center">No sites found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <MultiSelect
+                options={siteOptions}
+                selectedIds={siteIds}
+                onChange={setSiteIds}
+                placeholder="Assign sites to user..."
+                openDirection="up"
+              />
             </div>
+            )}
           </div>
 
           {/* Password Reset Sub-panel for Editing mode inside the scrollable area */}
