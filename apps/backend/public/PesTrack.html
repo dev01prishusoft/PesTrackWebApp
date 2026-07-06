@@ -80,7 +80,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="input-group">
       <label for="password">Password</label>
-      <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+      <div class="pw-wrap">
+        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+        <button type="button" id="pw-toggle" class="pw-toggle" onclick="togglePassword()" aria-label="Show password" tabindex="-1">
+          <svg id="pw-eye" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
     <button class="login-btn" id="login-btn" onclick="login()">Login</button>
   </div>
@@ -101,7 +106,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="hbtn blue" id="btn-export" onclick="exportFindings()" title="Export all findings with photos — use this to back up and share">📤 Export JSON</button>
     <button class="hbtn blue" onclick="triggerImport()" title="Import findings from a previously exported JSON">📥 Import JSON</button>
     <button class="hbtn" style="background:#7C3AED;color:#fff;border-color:#7C3AED" onclick="openPdfSortModal()">📋 PDF Report</button>
-    <button class="hbtn" style="background:#0F766E;color:#fff;border-color:#0F766E" onclick="document.getElementById('parcel-xlsx-input').click()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
+    <button class="hbtn" style="background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
     <input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importFindings(this)">
     <input type="file" id="parcel-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="importParcelsXlsx(this)">
     <div id="user-menu-wrap" style="position:relative;display:none">
@@ -457,6 +462,26 @@ window.importFindings = importFindings;
   border-color: #2D8A4E;               /* --primary */
   box-shadow: 0 0 0 2px rgba(45, 138, 78, 0.4); /* ring-primary/40 */
 }
+/* Password field show/hide toggle */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 38px; }  /* room for the eye button */
+.pw-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #64748b;                      /* --muted-foreground */
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.pw-toggle:hover { color: #0f172a; background: #f1f5f9; }
 .login-btn {
   width: 100%;
   height: 36px;                        /* h-9 */
@@ -590,7 +615,8 @@ function loadParcels() {
 function importParcelsXlsx(input){
   const file = input.files[0];
   if(!file){ return; }
-  
+  if (requireSite()) { input.value = ''; return; }
+
   showNotif('⏳ Uploading parcel list...', false, 0);
   const formData = new FormData();
   formData.append('file', file);
@@ -907,7 +933,26 @@ function injectModals(){
 }
 
 // ── Tool activation ────────────────────────────────────────────────
+// Guard for actions that need a selected site. Returns true (and shows a
+// message) when no site is assigned/selected, so the caller can bail out.
+function requireSite(){
+  if (!currentSiteId) {
+    showNotif('⚠️ No site assigned to your account — please contact an administrator.', true, 5000);
+    return true;
+  }
+  return false;
+}
+
+// Open the parcel-XLSX picker, but only if a site is selected (so the user gets
+// the "no site" message before the file dialog appears).
+function triggerParcelUpload(){
+  if (requireSite()) return;
+  document.getElementById('parcel-xlsx-input').click();
+}
+window.triggerParcelUpload = triggerParcelUpload;
+
 function startFindingsTool(){
+  if (requireSite()) return;
   findingsTool = !findingsTool;
   document.getElementById('btn-fi').classList.toggle('on', findingsTool);
   map.getContainer().style.cursor = findingsTool ? 'crosshair' : '';
@@ -924,6 +969,7 @@ function startConstrTool(){
     showNotif('⚠️ Viewers cannot add construction zones', true, 3000);
     return;
   }
+  if (requireSite()) return;
   if(findingsTool){ startFindingsTool(); }
   constrTool = !constrTool;
   document.getElementById('btn-cz').classList.toggle('on', constrTool);
@@ -1173,19 +1219,12 @@ function handleFiPhotos(input){
   Array.from(input.files).forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
+      // Defer the S3 upload until the visit is saved. Here we only compress and
+      // keep the photo locally as a base64 data-URI for instant preview, so
+      // cancelling the dialog never leaves orphaned uploads in the bucket.
       compressPhoto(e.target.result, compressed => {
-        showNotif('⏳ Uploading photo...', false, 0);
-        const blob = dataURLtoBlob(compressed);
-        uploadPhotoToServer(blob)
-          .then(res => {
-            pendingPhotos.push(res.url); 
-            renderPhotoPreview();
-            showNotif('✅ Photo uploaded');
-          })
-          .catch(err => {
-            console.error(err);
-            showNotif('❌ Photo upload failed', true, 3000);
-          });
+        pendingPhotos.push(compressed);
+        renderPhotoPreview();
       });
     };
     reader.readAsDataURL(file);
@@ -1263,7 +1302,22 @@ function saveFinding(){
   }
 
   const token = localStorage.getItem('pt_admin_token');
-  showNotif('⏳ Saving finding...', false, 0);
+
+  // Upload any locally-held (base64) photos to S3 now, at save time. Entries
+  // that are already S3 URLs (existing photos when editing) pass through
+  // unchanged. Returns the final list of URLs to store on the visit.
+  function resolvePendingPhotos(){
+    const jobs = pendingPhotos.map(p => {
+      if (typeof p !== 'string' || !p.startsWith('data:')) return Promise.resolve(p);
+      return uploadPhotoToServer(dataURLtoBlob(p)).then(res => res.url);
+    });
+    return Promise.all(jobs);
+  }
+
+  const hasUploads = pendingPhotos.some(p => typeof p === 'string' && p.startsWith('data:'));
+  showNotif(hasUploads ? '⏳ Uploading photos & saving…' : '⏳ Saving finding...', false, 0);
+
+  resolvePendingPhotos().then(photoUrls => {
 
   const visitPayload = {
     visitDate: date,
@@ -1272,8 +1326,22 @@ function saveFinding(){
     notes: notes,
     escalatedToId: escalationLabelToId[escalated] || escalationLabelToId['Not assigned'],
     statusId: statusLabelToId[STATUS_MAP[selectedStat]] || statusLabelToId['1st Offense'],
-    photos: pendingPhotos
+    photos: photoUrls
   };
+
+  // Resolve the selected parcel NAME (dropdown) back to its DB id so edits to an
+  // existing finding persist the parcel change. Trimmed + case-insensitive match.
+  const _normP = s => (s || '').trim().toLowerCase();
+  const _pObjEdit = parcel
+    ? parcels.find(p => _normP(p.parcel_name) === _normP(parcel))
+    : null;
+  const editParcelId = _pObjEdit ? _pObjEdit.id : null;
+
+  // Parse the coordinates field so edits to an existing finding persist a moved
+  // GPS location. Only send lat/lng when they parse to valid numbers; otherwise
+  // omit them so the location is left unchanged (and bad input can't blank it).
+  const _editLL = coordsRaw ? parseCoords(coordsRaw) : null;
+  const editCoords = _editLL ? { lat: Number(_editLL.lat), lng: Number(_editLL.lng) } : {};
 
   let savePromise;
 
@@ -1284,7 +1352,7 @@ function saveFinding(){
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token
       },
-      body: JSON.stringify({ siteId: currentSiteId, ...visitPayload })
+      body: JSON.stringify({ siteId: currentSiteId, parcel_id: editParcelId, ...editCoords, ...visitPayload })
     })
     .then(res => {
       if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
@@ -1297,7 +1365,7 @@ function saveFinding(){
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token
       },
-      body: JSON.stringify({ siteId: currentSiteId, ...visitPayload })
+      body: JSON.stringify({ siteId: currentSiteId, parcel_id: editParcelId, ...editCoords, ...visitPayload })
     })
     .then(res => {
       if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
@@ -1358,7 +1426,7 @@ function saveFinding(){
     });
   }
 
-  savePromise
+  return savePromise
   .then(() => {
     document.getElementById('m-fi').style.display = 'none';
     findingsTool = false;
@@ -1367,13 +1435,18 @@ function saveFinding(){
     pendingFindingLL = null;
     editingLocId = null;
     editingVisitId = null;
-    
+    pendingPhotos = [];
+
     loadFindings();
     showNotif('✅ Finding saved');
-  })
+  });
+
+  }) // end resolvePendingPhotos().then
   .catch(err => {
     console.error(err);
-    showNotif('❌ Failed to save finding', true, 3000);
+    // Upload OR save failure — the modal stays open so nothing is lost and the
+    // user can retry. (Locally-held photos remain in pendingPhotos.)
+    showNotif('❌ ' + (err && err.message ? err.message : 'Failed to save finding'), true, 4000);
   });
 }
 window.saveFinding = saveFinding;
@@ -1781,6 +1854,20 @@ function logout() {
 }
 window.logout = logout;
 
+function togglePassword() {
+  const input = document.getElementById('password');
+  const btn = document.getElementById('pw-toggle');
+  const eye = document.getElementById('pw-eye');
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  // Swap between the eye (visible) and eye-off (hidden) icons.
+  eye.innerHTML = show
+    ? '<path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>'
+    : '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>';
+}
+window.togglePassword = togglePassword;
+
 function login() {
   const u = document.getElementById('username').value.trim();
   const p = document.getElementById('password').value;
@@ -1932,11 +2019,13 @@ function bootApp() {
   .then(res => res.json())
   .then(sitesData => {
     sites = sitesData.data || [];
-    if (sites.length === 0) {
-      showNotif('❌ No assigned sites found', true, 5000);
-      return;
-    }
-    
+
+    // Always apply role permissions (hide/show header buttons) and initialize
+    // the map, even when the user has no assigned sites — otherwise the toolbar
+    // keeps its default (all-buttons-visible) state and the map never renders.
+    const userRole = currentUser ? currentUser.role : 'client_viewer';
+    applyPermissions(userRole);
+
     const picker = document.getElementById('site-selector');
     picker.innerHTML = '';
     sites.forEach(s => {
@@ -1945,20 +2034,23 @@ function bootApp() {
       opt.textContent = s.name;
       picker.appendChild(opt);
     });
-    
-    currentSiteId = sites[0].id;
-    
-    const userRole = currentUser ? currentUser.role : 'client_viewer';
-    applyPermissions(userRole);
-    
+
     if (typeof map === 'undefined' || !map) {
       init();
       initFindings();
-    } else {
-      changeSite(currentSiteId);
     }
-    
+
     buildEscalationSelect();
+
+    if (sites.length === 0) {
+      // No sites assigned: map is initialized but there's nothing to load.
+      currentSiteId = null;
+      showNotif('❌ No sites assigned to your account. Contact an administrator.', true, 6000);
+      return;
+    }
+
+    currentSiteId = sites[0].id;
+    changeSite(currentSiteId);
   })
   .catch(err => {
     console.error(err);
@@ -1971,7 +2063,7 @@ function applyPermissions(role) {
   const btnCz = document.getElementById('btn-cz');
   const btnExport = document.getElementById('btn-export');
   const btnImport = document.querySelector('button[onclick="triggerImport()"]');
-  const btnUpdateParcels = document.querySelector('button[onclick*="parcel-xlsx-input"]');
+  const btnUpdateParcels = document.querySelector('button[onclick="triggerParcelUpload()"]');
 
   // Header profile menu: shows who's signed in and their role (so a client
   // viewer understands why edit controls are hidden) plus the logout action.
@@ -2073,6 +2165,14 @@ function buildEscalationSelect() {
 
 function changeSite(siteId) {
   currentSiteId = siteId;
+  // No site selected (e.g. a user with no assigned sites): the map is already
+  // initialized with a default view — skip site-scoped data loading, which
+  // would otherwise fire requests with siteId=null.
+  if (!siteId) {
+    if (typeof findingsLayer !== 'undefined' && findingsLayer) findingsLayer.clearLayers();
+    if (typeof constrLayer !== 'undefined' && constrLayer) constrLayer.clearLayers();
+    return;
+  }
   const siteObj = sites.find(s => s.id === siteId);
   if (siteObj && map) {
     const lat = siteObj.map_center_lat ? Number(siteObj.map_center_lat) : 27.3949;
@@ -3017,18 +3117,33 @@ async function exportFindingsPDF(sortBy='number'){
           // narrower, more of them fit per row; landscape images are
           // wider so fewer fit per row.
           const MAX_W = 30, MAX_H = 40, gap = 3;
-          // helper: decode a data-URI into a natural {w,h} via an Image element
-          function getImgDims(dataUri){
+          // Load a photo (base64 data-URI OR S3 https URL) and return its natural
+          // {w,h} PLUS a base64 data-URI. jsPDF.addImage() cannot fetch remote
+          // URLs, so S3 photos must be converted to data-URIs here (via a
+          // CORS-enabled canvas) or they silently fail to render.
+          function loadImg(src){
             return new Promise(function(resolve){
               const img = new Image();
-              img.onload = function(){ resolve({w:img.naturalWidth, h:img.naturalHeight}); };
-              img.onerror = function(){ resolve({w:1, h:1}); };
-              img.src = dataUri;
+              img.crossOrigin = 'anonymous'; // read S3 images untainted (needs bucket CORS)
+              img.onload = function(){
+                let data = src;
+                // If it's a remote URL, redraw to canvas to get base64 pixels.
+                if(!/^data:/i.test(src)){
+                  try{
+                    const c = document.createElement('canvas');
+                    c.width = img.naturalWidth; c.height = img.naturalHeight;
+                    c.getContext('2d').drawImage(img, 0, 0);
+                    data = c.toDataURL('image/jpeg', 0.72);
+                  }catch(e){ data = null; }
+                }
+                resolve({ w: img.naturalWidth, h: img.naturalHeight, data });
+              };
+              img.onerror = function(){ resolve({ w:1, h:1, data:null }); };
+              img.src = src;
             });
           }
-          // Resolve all photo dimensions, then render
-          const dimPromises = visit.photos.map(p => getImgDims(p));
-          const dims = await Promise.all(dimPromises);
+          // Resolve all photo dimensions + base64 data, then render
+          const dims = await Promise.all(visit.photos.map(p => loadImg(p)));
 
           // Build rows: each photo has its own pW/pH; pack into rows
           // that fit within the column width CW-6.
@@ -3055,7 +3170,7 @@ async function exportFindingsPDF(sortBy='number'){
               curRow = [];
               curRowW = 0;
             }
-            curRow.push({pi, itemW, itemH, data: visit.photos[pi]});
+            curRow.push({pi, itemW, itemH, data: dims[pi].data});
             curRowW += (curRow.length === 1 ? itemW : itemW + gap);
           }
           if(curRow.length) rowItems.push(curRow);
@@ -3066,11 +3181,13 @@ async function exportFindingsPDF(sortBy='number'){
             ensurePage(rowH + 4);
             let ppx = ML + 3;
             for(const item of row){
-              try{
-                pdf.addImage(item.data, 'JPEG', ppx, y, item.itemW, item.itemH);
-                pdf.setDrawColor(200,210,220); pdf.setLineWidth(0.2);
-                pdf.rect(ppx, y, item.itemW, item.itemH);
-              }catch(e){}
+              if(item.data){
+                try{
+                  pdf.addImage(item.data, 'JPEG', ppx, y, item.itemW, item.itemH);
+                  pdf.setDrawColor(200,210,220); pdf.setLineWidth(0.2);
+                  pdf.rect(ppx, y, item.itemW, item.itemH);
+                }catch(e){}
+              }
               ppx += item.itemW + gap;
             }
             y += rowH + gap;
@@ -3090,13 +3207,24 @@ async function exportFindingsPDF(sortBy='number'){
       // Each finding's "current" classification = its latest visit
       const recap = visibleFindings.map(loc=>{
         const latest = loc.visits[0] || {};
-        const quad = (window._quadOfLoc ? window._quadOfLoc(loc) : null);
-        const lastEsc = (loc.visits.find(v=>v.escalated)||{}).escalated || null;
+        // Region is derived STRICTLY from the finding's assigned parcel — no
+        // nearest-parcel geometry guessing. An unassigned finding stays
+        // "Unassigned" in both the parcel column and the region grouping, so
+        // the two sections always agree (matches the legacy report).
+        let quad = 'Unassigned';
+        if (loc.parcel) {
+          const p = (window._PARCELS||[]).find(pp => pp.name === loc.parcel);
+          if (p && p.quad) quad = p.quad;
+        }
+        // "Not assigned" (and empty) are NOT real assignments — treat them as
+        // unassigned so a genuine escalation on an older visit still wins.
+        const isRealEsc = e => e && e !== 'Not assigned';
+        const lastEsc = (loc.visits.find(v=>isRealEsc(v.escalated))||{}).escalated || null;
         return {
           cat: latest.cat || 'other',
           status: latest.status || 'open',
           parcel: loc.parcel || 'Unassigned',
-          quad: quad || 'Unassigned',
+          quad: quad,
           escalated: lastEsc,
           repeats: loc.visits.filter(v=>v.status==='repeat').length,
           visits: loc.visits.length

@@ -57,6 +57,33 @@ async function shapeFindings(locRows, visitRows, photoRows) {
   }));
 }
 
+// Persist location-level edits (parcel + GPS) made from a visit dialog. Only
+// columns the client actually sent are updated, so unrelated fields are left
+// as-is. lat/lng are ignored unless they parse to finite numbers.
+async function updateLocationFields(client, locationId, body) {
+  const sets = [];
+  const params = [];
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+
+  if (has('parcel_id')) {
+    params.push(body.parcel_id || null);
+    sets.push(`parcel_id = $${params.length}`);
+  }
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+  if (has('lat') && has('lng') && Number.isFinite(lat) && Number.isFinite(lng)) {
+    params.push(lat); sets.push(`lat = $${params.length}`);
+    params.push(lng); sets.push(`lng = $${params.length}`);
+  }
+  if (!sets.length) return;
+
+  params.push(locationId);
+  await client.query(
+    `UPDATE locations SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`,
+    params
+  );
+}
+
 // Replace all photo rows for a visit. Client may send presigned URLs or raw keys;
 // normalize each to the bare S3 key before storing so future presigns stay valid.
 async function setVisitPhotos(client, visitDbId, photos, userId) {
@@ -207,6 +234,8 @@ async function addVisit(req, res, next) {
         ]
       );
       await setVisitPhotos(client, rows[0].id, photos, req.user.id);
+      // Persist parcel / GPS changes made while adding a visit, if sent.
+      await updateLocationFields(client, location.id, req.body);
       return rows[0];
     });
 
@@ -256,6 +285,9 @@ async function editVisit(req, res, next) {
       );
       if (!rows[0]) return null;
       await setVisitPhotos(client, rows[0].id, photos, req.user.id);
+      // Persist parcel / GPS changes made in the edit dialog. Each field is only
+      // updated when the client sends it, so omitting one leaves it unchanged.
+      await updateLocationFields(client, location.id, req.body);
       return rows[0];
     });
 

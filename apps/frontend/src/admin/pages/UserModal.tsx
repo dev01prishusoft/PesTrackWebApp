@@ -84,6 +84,12 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
       }
     }
 
+    // Engineers and client_viewers must be assigned at least one site. Admins
+    // are exempt (they have access to every site — the field is hidden).
+    if (!isAdmin && siteIds.length === 0) {
+      errors.siteIds = 'At least one site must be assigned';
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -284,14 +290,15 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
             {!isAdmin && (
             <div className="sm:col-span-2 mt-2">
-              <label className="block text-xs font-semibold text-muted-foreground mb-2">Assigned Sites</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-2">Assigned Sites <span className="text-destructive">*</span></label>
               <MultiSelect
                 options={siteOptions}
                 selectedIds={siteIds}
-                onChange={setSiteIds}
+                onChange={(ids) => { setSiteIds(ids); setFieldErrors(prev => ({ ...prev, siteIds: '' })); }}
                 placeholder="Assign sites to user..."
                 openDirection="up"
               />
+              {fieldErrors.siteIds && <p className="text-destructive text-xs mt-1">{fieldErrors.siteIds}</p>}
             </div>
             )}
           </div>

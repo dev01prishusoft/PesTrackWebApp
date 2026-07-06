@@ -1,12 +1,24 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Render provides DATABASE_URL and requires SSL in production.
-const isProduction = process.env.NODE_ENV === 'production';
+const dbUrl = process.env.DATABASE_URL || '';
+
+// Enable SSL for managed Postgres (e.g. Render), which requires it even when
+// connecting from a local dev machine. Triggered by any of:
+//   - NODE_ENV=production
+//   - PGSSL=true (explicit override)
+//   - the connection string asks for it (sslmode=require) or targets a
+//     known managed host (render.com)
+// Local Postgres (no SSL) is the default otherwise.
+const useSsl =
+  process.env.NODE_ENV === 'production' ||
+  process.env.PGSSL === 'true' ||
+  /sslmode=require/i.test(dbUrl) ||
+  /render\.com/i.test(dbUrl);
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
+  connectionString: dbUrl,
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
 });
 
 pool.on('error', (err) => {

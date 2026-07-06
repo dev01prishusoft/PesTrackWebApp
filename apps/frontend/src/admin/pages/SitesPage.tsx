@@ -57,10 +57,13 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 
   const userOptions = useMemo(() => {
     if (!allUsers) return [];
-    return allUsers.map((u) => ({
-      id: u.id,
-      name: `${u.full_name || u.username} (${u.role.replace('_', ' ')})`,
-    }));
+    // Admins have access to every site already, so they aren't assignable here.
+    return allUsers
+      .filter((u) => u.role !== 'admin')
+      .map((u) => ({
+        id: u.id,
+        name: `${u.full_name || u.username} (${u.role.replace('_', ' ')})`,
+      }));
   }, [allUsers]);
 
   async function save() {
@@ -86,6 +89,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
       const zVal = parseInt(zoom, 10);
       if (isNaN(zVal) || zVal < 1 || zVal > 20) errors.zoom = 'Must be a valid integer between 1 and 20';
     }
+    if (userIds.length === 0) errors.users = 'At least one user must be assigned';
 
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setFieldErrors({});
@@ -182,14 +186,15 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
             </div>
 
             <div>
-              <label className={labelCls}>Assigned users</label>
+              <label className={labelCls}>Assigned users <span className="text-destructive">*</span></label>
               <MultiSelect
                 options={userOptions}
                 selectedIds={userIds}
-                onChange={setUserIds}
+                onChange={(ids) => { setUserIds(ids); setFieldErrors(prev => ({ ...prev, users: '' })); }}
                 placeholder="Assign users to site..."
                 openDirection="up"
               />
+              {fieldErrors.users && <p className="text-destructive text-xs mt-1">{fieldErrors.users}</p>}
             </div>
           </div>
         </div>
