@@ -1,6 +1,6 @@
 const { query, withTransaction } = require('../config/database');
 const { logAction } = require('../services/auditService');
-const { uploadPhoto, presignKeys, toStorageKey } = require('../services/storageService');
+const { uploadPhoto, deletePhotos, presignKeys, toStorageKey } = require('../services/storageService');
 const {
   validate,
   required,
@@ -86,7 +86,16 @@ async function updateLocationFields(client, locationId, body) {
 
 // Replace all photo rows for a visit. Client may send presigned URLs or raw keys;
 // normalize each to the bare S3 key before storing so future presigns stay valid.
+// Any photo that was on the visit but is no longer in the new set is deleted from
+// S3 too, so removing a photo during an edit doesn't leave an orphaned object.
 async function setVisitPhotos(client, visitDbId, photos, userId) {
+  const { rows: oldRows } = await client.query(
+    'SELECT photo_url FROM photos WHERE visit_id = $1',
+    [visitDbId]
+  );
+  const newKeys = new Set(photos.map((p) => toStorageKey(p)));
+  const removed = oldRows.map((r) => r.photo_url).filter((k) => !newKeys.has(k));
+
   await client.query('DELETE FROM photos WHERE visit_id = $1', [visitDbId]);
   for (const p of photos) {
     await client.query(
@@ -94,6 +103,30 @@ async function setVisitPhotos(client, visitDbId, photos, userId) {
       [visitDbId, toStorageKey(p), userId]
     );
   }
+  // Fire-and-forget: S3 cleanup runs after the row changes; failures are logged,
+  // not thrown, so they never roll back the visit save.
+  if (removed.length) deletePhotos(removed);
+}
+
+// Collect the stored S3 keys for photos belonging to the given visits or
+// locations, so they can be removed from S3 after the DB rows are deleted.
+async function photoKeysForVisits(visitIds) {
+  if (!visitIds.length) return [];
+  const { rows } = await query(
+    'SELECT photo_url FROM photos WHERE visit_id = ANY($1::uuid[])',
+    [visitIds]
+  );
+  return rows.map((r) => r.photo_url);
+}
+async function photoKeysForLocations(locationIds) {
+  if (!locationIds.length) return [];
+  const { rows } = await query(
+    `SELECT p.photo_url FROM photos p
+       JOIN visits v ON v.id = p.visit_id
+      WHERE v.location_id = ANY($1::uuid[])`,
+    [locationIds]
+  );
+  return rows.map((r) => r.photo_url);
 }
 
 // --- findings (locations + visits) -----------------------------------------
@@ -312,8 +345,11 @@ async function deleteVisit(req, res, next) {
       params.push(req.user.id);
       where += ` AND created_by = $${params.length}`;
     }
+    // Grab the visit's photo keys before the row (and its photos) are deleted.
+    const photoKeys = await photoKeysForVisits([req.params.visitId]);
     const { rowCount } = await query(`DELETE FROM visits WHERE ${where}`, params);
     if (!rowCount) return res.status(404).json({ error: 'Visit not found' });
+    deletePhotos(photoKeys);
 
     await logAction({ req, action: 'DELETE', tableName: 'visits', recordId: req.params.visitId, siteId });
     res.json({ message: 'Visit deleted' });
@@ -325,11 +361,14 @@ async function deleteVisit(req, res, next) {
 async function deleteFinding(req, res, next) {
   try {
     const siteId = req.query.siteId;
+    // Collect all photo keys under this finding before the cascade deletes them.
+    const photoKeys = await photoKeysForLocations([req.params.locationId]);
     const { rowCount } = await query('DELETE FROM locations WHERE id = $1 AND site_id = $2', [
       req.params.locationId,
       siteId,
     ]);
     if (!rowCount) return res.status(404).json({ error: 'Finding not found' });
+    deletePhotos(photoKeys);
 
     await logAction({ req, action: 'DELETE', tableName: 'locations', recordId: req.params.locationId, siteId });
     res.json({ message: 'Finding deleted' });
@@ -342,11 +381,28 @@ async function clearFindings(req, res, next) {
   try {
     const siteId = req.query.siteId;
     let rowCount;
+    let photoKeys = [];
     if (req.user.role === 'admin') {
-      // Admin clears every finding on the site.
+      // Admin clears every finding on the site — grab all its photo keys first.
+      const { rows: kr } = await query(
+        `SELECT p.photo_url FROM photos p
+           JOIN visits v ON v.id = p.visit_id
+           JOIN locations l ON l.id = v.location_id
+          WHERE l.site_id = $1`,
+        [siteId]
+      );
+      photoKeys = kr.map((r) => r.photo_url);
       ({ rowCount } = await query('DELETE FROM locations WHERE site_id = $1', [siteId]));
     } else {
-      // Non-admin clears only their own visits, then removes any location left empty.
+      // Non-admin clears only their own visits — grab those visits' photo keys first.
+      const { rows: kr } = await query(
+        `SELECT p.photo_url FROM photos p
+           JOIN visits v ON v.id = p.visit_id
+          WHERE v.created_by = $1
+            AND v.location_id IN (SELECT id FROM locations WHERE site_id = $2)`,
+        [req.user.id, siteId]
+      );
+      photoKeys = kr.map((r) => r.photo_url);
       const del = await query(
         `DELETE FROM visits WHERE created_by = $1
            AND location_id IN (SELECT id FROM locations WHERE site_id = $2)`,
@@ -359,6 +415,7 @@ async function clearFindings(req, res, next) {
         [siteId]
       );
     }
+    deletePhotos(photoKeys);
     await logAction({
       req,
       action: 'DELETE',

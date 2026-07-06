@@ -393,9 +393,11 @@ window.importFindings = importFindings;
 #fi-photo-preview{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 #fi-photo-preview img{width:54px;height:40px;object-fit:cover;border-radius:3px;
   border:1px solid #ddd;cursor:pointer;position:relative}
-.fi-photo-del{position:absolute;top:-4px;right:-4px;background:#c0392b;color:#fff;
-  border-radius:50%;width:14px;height:14px;font-size:.5rem;display:flex;
-  align-items:center;justify-content:center;cursor:pointer;border:none}
+.fi-photo-del{position:absolute;top:-5px;right:-5px;background:#c0392b;color:#fff;
+  border-radius:50%;width:17px;height:17px;font-size:.6rem;line-height:1;display:flex;
+  align-items:center;justify-content:center;cursor:pointer;border:1px solid #fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);padding:0}
+.fi-photo-del:hover{background:#e74c3c}
 .photo-wrap{position:relative;display:inline-block}
 
 /* Glassmorphism Login Container */
@@ -1239,7 +1241,10 @@ function renderPhotoPreview(){
   pendingPhotos.forEach((b64, i) => {
     const wrap = document.createElement('div');
     wrap.className = 'photo-wrap';
-    wrap.innerHTML = `<img src="${b64}" title="Click to remove" onclick="removePendingPhoto(${i})">`;
+    // Image opens the lightbox; the corner ✕ button removes the photo.
+    wrap.innerHTML =
+      `<img src="${b64}" title="Click to enlarge" onclick="openLightbox('${b64}')">` +
+      `<button type="button" class="fi-photo-del" title="Remove photo" onclick="removePendingPhoto(${i})">✕</button>`;
     div.appendChild(wrap);
   });
 }

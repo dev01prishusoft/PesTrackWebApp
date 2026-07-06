@@ -1,5 +1,10 @@
 const crypto = require('crypto');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectsCommand,
+} = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 /**
@@ -91,6 +96,38 @@ function toStorageKey(value) {
   return value; // already a bare key
 }
 
+/**
+ * Delete photos from S3 by their stored value (key OR our-bucket URL). Values
+ * that aren't objects in our bucket (data: URLs, external http URLs) are
+ * skipped. Best-effort: never throws — S3 cleanup must not block a DB delete.
+ * S3 supports up to 1000 keys per DeleteObjects call, so we batch.
+ */
+async function deletePhotos(values) {
+  if (!isConfigured() || !Array.isArray(values) || values.length === 0) return;
+
+  // Resolve each stored value to a bare S3 key; drop data:/external URLs.
+  const keys = values
+    .map((v) => (typeof v === 'string' ? toStorageKey(v) : null))
+    .filter((k) => typeof k === 'string' && !/^https?:/.test(k) && !k.startsWith('data:'));
+  if (keys.length === 0) return;
+
+  try {
+    for (let i = 0; i < keys.length; i += 1000) {
+      const batch = keys.slice(i, i + 1000);
+      await getClient().send(
+        new DeleteObjectsCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+    }
+  } catch (err) {
+    // Log and move on — orphaned objects are recoverable; a failed request is not
+    // worth aborting the surrounding DB transaction over.
+    console.error('S3 photo deletion failed (objects may be orphaned):', err.message);
+  }
+}
+
 /** Time-limited GET URL for a stored key (bucket stays private). */
 async function presignGet(key) {
   return getSignedUrl(
@@ -119,4 +156,4 @@ async function presignKeys(values) {
   );
 }
 
-module.exports = { uploadPhoto, presignGet, presignKeys, toStorageKey, isConfigured };
+module.exports = { uploadPhoto, deletePhotos, presignGet, presignKeys, toStorageKey, isConfigured };
