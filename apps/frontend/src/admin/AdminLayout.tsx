@@ -99,7 +99,7 @@ function AdminLayoutInner() {
                   setDrawerOpen((o) => !o);
                 }
               }}
-              className="w-9 h-9 grid place-items-center rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0"
+              className="w-9 h-9 grid place-items-center rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0 cursor-pointer"
               aria-label="Toggle menu"
             >
               <Menu size={18} />
@@ -110,7 +110,7 @@ function AdminLayoutInner() {
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((o) => !o)}
-              className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors"
+              className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors cursor-pointer"
             >
               <span className="w-[34px] h-[34px] rounded-full bg-primary/10 text-primary grid place-items-center font-bold text-sm shrink-0">
                 {initial}
@@ -142,7 +142,7 @@ function AdminLayoutInner() {
                     });
                     if (ok) logout();
                   }}
-                  className="flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                 >
                   <LogOut size={15} /> Logout
                 </button>
@@ -151,7 +151,32 @@ function AdminLayoutInner() {
           </div>
         </header>
 
-        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
+          <div id="admin-main-loader" style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(255, 255, 255, 0.4)',
+            backdropFilter: 'blur(2px)',
+            display: 'none',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 40,
+            flexDirection: 'column',
+            gap: '16px',
+            color: '#1e293b',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+          }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid rgba(45, 138, 78, 0.2)',
+              borderTop: '3px solid #2d8a4e',
+              borderRadius: '50%',
+              animation: 'global-spin 1s linear infinite',
+            }}></div>
+            <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
+          </div>
+
           <div className="w-full px-3 py-4 sm:px-6 sm:py-6 flex-1 min-h-0 flex flex-col">
             <Outlet />
           </div>

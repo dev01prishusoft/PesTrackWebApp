@@ -39,6 +39,7 @@ async function uploadParcels(req, res, next) {
     }
 
     const insertedParcels = [];
+    const skipped = []; // rows that violated a column length limit
     for (const row of data) {
       // Find keys case-insensitively
       const findVal = (keys) => {
@@ -53,6 +54,10 @@ async function uploadParcels(req, res, next) {
       const quadrant = findVal(['quadrant', 'quad', 'zone']);
 
       if (!name) continue; // Skip rows without name
+      // Guard against values that exceed the DB column limits (a single bad row
+      // would otherwise abort the whole upload). Collect skips to report back.
+      if (String(name).length > 100) { skipped.push({ name: String(name).slice(0, 40), reason: 'name too long (max 100)' }); continue; }
+      if (quadrant != null && String(quadrant).length > 10) { skipped.push({ name: String(name), reason: 'quadrant too long (max 10)' }); continue; }
 
       let lat = null;
       let lng = null;
@@ -124,8 +129,11 @@ async function uploadParcels(req, res, next) {
     });
 
     res.json({
-      message: `Successfully processed ${insertedParcels.length} parcels.`,
+      message: skipped.length
+        ? `Processed ${insertedParcels.length} parcels. Skipped ${skipped.length} invalid row(s).`
+        : `Successfully processed ${insertedParcels.length} parcels.`,
       parcels: insertedParcels,
+      skipped,
     });
   } catch (err) {
     next(err);

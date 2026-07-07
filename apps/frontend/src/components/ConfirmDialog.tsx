@@ -39,8 +39,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {opts && (
-        <div className="mov" onClick={() => close(false)}>
-          <div className="mod" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+        <div className="mov">
+          <div className="mod" style={{ maxWidth: 400 }}>
             <h3>{opts.title}</h3>
             {opts.message && (
               <p style={{ fontSize: '.8rem', color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-line' }}>

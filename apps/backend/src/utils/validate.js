@@ -50,6 +50,10 @@ const maxLen = (n) => (v) =>
 const oneOf = (allowed) => (v) =>
   allowed.includes(v) ? undefined : `Must be one of: ${allowed.join(', ')}`;
 
+// Rejects any whitespace (e.g. usernames must be a single token).
+const noSpaces = (v) =>
+  typeof v === 'string' && /\s/.test(v) ? 'Cannot contain spaces' : undefined;
+
 // Deliberately simple email shape check (server is not an email verifier).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const isEmail = (v) =>
@@ -93,5 +97,6 @@ module.exports = {
   minLen,
   maxLen,
   oneOf,
+  noSpaces,
   isEmail,
 };

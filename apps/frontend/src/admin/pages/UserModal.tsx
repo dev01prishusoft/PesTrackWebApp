@@ -5,6 +5,7 @@ import { MultiSelect } from '../components/ui/MultiSelect';
 import {
   useCreateUser, useUpdateUser, useResetPassword, useAllSites,
 } from '../api/queries';
+import { ApiError } from '../../lib/api';
 import type { User } from '../lib/types';
 
 const inputCls =
@@ -59,8 +60,14 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
     if (!fullName.trim()) {
       errors.fullName = 'Full name is required';
     }
-    if (!editing && !username.trim()) {
-      errors.username = 'Username is required';
+    if (!editing) {
+      if (!username.trim()) {
+        errors.username = 'Username is required';
+      } else if (/\s/.test(username)) {
+        errors.username = 'Username cannot contain spaces';
+      } else if (username.trim().length < 3) {
+        errors.username = 'Username must be at least 3 characters';
+      }
     }
     if (!email.trim()) {
       errors.email = 'Email is required';
@@ -115,6 +122,10 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
       }
       onClose();
     } catch (e) {
+      // Surface per-field conflicts (unique username/email/full name) inline.
+      if (e instanceof ApiError && e.fields) {
+        setFieldErrors((prev) => ({ ...prev, ...(e.fields as Record<string, string>) }));
+      }
       setErr((e as Error).message);
     }
   }
@@ -152,8 +163,8 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   }
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl shadow-xl w-[620px] max-w-[94vw] max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-2xl shadow-xl w-[620px] max-w-[94vw] max-h-[85vh] flex flex-col overflow-hidden">
         {/* Fixed Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-bold m-0">{editing ? 'Edit User' : 'New User'}</h3>
@@ -168,7 +179,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Full name <span className="text-destructive">*</span></label>
-              <input className={inputCls} value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => ({ ...prev, fullName: '' })); }} placeholder="Full Name" />
+              <input className={inputCls} maxLength={255} value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => ({ ...prev, fullName: '' })); }} placeholder="Full Name" />
               {fieldErrors.fullName && <p className="text-destructive text-xs mt-1">{fieldErrors.fullName}</p>}
             </div>
 
@@ -176,8 +187,9 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Username {!editing && <span className="text-destructive">*</span>}</label>
               <input
                 className={`${inputCls} ${editing ? 'opacity-60 bg-muted cursor-not-allowed' : ''}`}
+                maxLength={100}
                 value={username}
-                onChange={(e) => { if (!editing) { setUsername(e.target.value); setFieldErrors(prev => ({ ...prev, username: '' })); } }}
+                onChange={(e) => { if (!editing) { setUsername(e.target.value.replace(/\s/g, '')); setFieldErrors(prev => ({ ...prev, username: '' })); } }}
                 placeholder="username"
                 disabled={editing}
               />
@@ -186,7 +198,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Email <span className="text-destructive">*</span></label>
-              <input className={inputCls} type="email" value={email} onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: '' })); }} placeholder="email@example.com" />
+              <input className={inputCls} type="email" maxLength={255} value={email} onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: '' })); }} placeholder="email@example.com" />
               {fieldErrors.email && <p className="text-destructive text-xs mt-1">{fieldErrors.email}</p>}
             </div>
 

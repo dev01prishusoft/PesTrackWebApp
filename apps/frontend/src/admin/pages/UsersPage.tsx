@@ -1,20 +1,41 @@
 import { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { DataTable } from '../components/DataTable';
 import { SearchInput } from '../components/SearchInput';
 import { Button } from '../components/ui/button';
 import { StatusBadge } from '../components/ui/badge';
 import { useListState } from '../hooks/useListState';
-import { useUsers } from '../api/queries';
+import { useUsers, useDeactivateUser } from '../api/queries';
+import { useAdminConfirm } from '../components/AdminConfirmDialog';
 import { UserModal } from './UserModal';
 import type { User } from '../lib/types';
 
 export function UsersPage() {
-  const ls = useListState({ sort: 'u.id' });
+  const ls = useListState({ sort: 'u.created_at', order: 'desc' });
   const [roleFilter, setRoleFilter] = useState('');
   const { data, isLoading, isError, error } = useUsers({ ...ls.params, role: roleFilter || undefined });
   const [editing, setEditing] = useState<User | null | undefined>(undefined);
+  const [actionErr, setActionErr] = useState('');
+  const deleteUser = useDeactivateUser();
+  const confirm = useAdminConfirm();
+
+  async function handleDelete(user: User) {
+    setActionErr('');
+    const ok = await confirm({
+      title: 'Delete user?',
+      message: 'This user will be permanently deleted. This can only be done if they have no recorded findings, visits, or construction zones.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteUser.mutateAsync(user.id);
+    } catch (e) {
+      // 409 -> user has referenced work; show the reference message.
+      setActionErr((e as Error).message);
+    }
+  }
 
   const columns = useMemo<ColumnDef<User, unknown>[]>(() => [
     { id: 'u.full_name', header: 'Name', accessorFn: (u) => u.full_name || '—' },
@@ -34,15 +55,25 @@ export function UsersPage() {
     {
       id: 'actions', header: 'Actions',
       cell: ({ row }) => (
-        <button
-          onClick={() => setEditing(row.original)}
-          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-          aria-label="Edit" title="Edit"
-        >
-          <Pencil size={15} />
-        </button>
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setEditing(row.original)}
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+            aria-label="Edit" title="Edit"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={() => handleDelete(row.original)}
+            className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+            aria-label="Delete" title="Delete"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       ),
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
   return (
@@ -69,6 +100,7 @@ export function UsersPage() {
       </div>
 
       {isError && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{(error as Error).message}</div>}
+      {actionErr && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{actionErr}</div>}
 
       <DataTable
         columns={columns}

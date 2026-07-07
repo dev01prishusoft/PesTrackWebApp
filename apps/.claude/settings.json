@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"require\\('./src/controllers/userController'\\);require\\('./src/controllers/siteController'\\);require\\('./src/controllers/findingController'\\);console.log\\('✓ controllers load'\\)\")",
+      "Bash(RENDER_DB_URL='postgresql://pestrack:By5dm8NUfvCCLh4okoLXpPQwjST0Ry4y@dpg-d93oqbbtqb8s73em4730-a.oregon-postgres.render.com:5432/pestrackdb' node /private/tmp/claude-501/-Users-apple-Projects-PesTrackWebApp-apps/a4f60361-5593-4218-b44d-730e1d8fd5ae/scratchpad/db-query.js \"SELECT action, table_name, \\(old_values IS NOT NULL\\) AS has_old, \\(new_values IS NOT NULL\\) AS has_new FROM audit_logs WHERE action='UPDATE' ORDER BY created_at DESC LIMIT 5\")",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

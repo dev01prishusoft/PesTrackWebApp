@@ -39,14 +39,8 @@ export function AdminConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {opts && (
-        <div
-          className="fixed inset-0 z-[4000] flex items-center justify-center bg-black/50 px-4"
-          onClick={() => close(false)}
-        >
-          <div
-            className="w-full max-w-sm bg-card border border-border rounded-2xl shadow-xl p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-[4000] flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl shadow-xl p-6">
             <h3 className="text-base font-bold text-foreground m-0">{opts.title}</h3>
             {opts.message && (
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed whitespace-pre-line">

@@ -9,7 +9,9 @@ function slugify(name) {
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100)          // slug column is varchar(100)
+    .replace(/-+$/g, '');   // avoid a trailing '-' left by the slice
 }
 
 // Admins see all sites; engineers and client_viewers see only their assigned
@@ -52,10 +54,26 @@ async function listSites(req, res, next) {
   }
 }
 
+// True when another site already uses this name (case-insensitive).
+// `excludeId` skips the site being edited.
+async function siteNameTaken(name, excludeId = null) {
+  const params = [name];
+  let sql = 'SELECT 1 FROM sites WHERE LOWER(name) = LOWER($1)';
+  if (excludeId) { params.push(excludeId); sql += ' AND id <> $2'; }
+  const { rowCount } = await query(sql + ' LIMIT 1', params);
+  return rowCount > 0;
+}
+
 async function createSite(req, res, next) {
   try {
     const { name, mapCenterLat, mapCenterLng, defaultZoom } = req.body || {};
     if (!name) return res.status(400).json({ error: 'Site name is required' });
+    if (String(name).length > 255) {
+      return res.status(400).json({ error: 'Site name is too long', fields: { name: 'Must be at most 255 characters' } });
+    }
+    if (await siteNameTaken(name)) {
+      return res.status(400).json({ error: 'Site name already exists', fields: { name: 'This site name is already in use' } });
+    }
     const slug = slugify(name);
     const { rows } = await query(
       `INSERT INTO sites (name, slug, map_center_lat, map_center_lng, default_zoom)
@@ -73,6 +91,18 @@ async function createSite(req, res, next) {
 async function updateSite(req, res, next) {
   try {
     const { name, mapCenterLat, mapCenterLng, defaultZoom, status } = req.body || {};
+    if (name != null && String(name).length > 255) {
+      return res.status(400).json({ error: 'Site name is too long', fields: { name: 'Must be at most 255 characters' } });
+    }
+    if (status != null && String(status).length > 50) {
+      return res.status(400).json({ error: 'Invalid status', fields: { status: 'Must be at most 50 characters' } });
+    }
+    if (name && await siteNameTaken(name, req.params.id)) {
+      return res.status(400).json({ error: 'Site name already exists', fields: { name: 'This site name is already in use' } });
+    }
+    // Snapshot the row before updating so the audit log can record old values.
+    const before = await query('SELECT * FROM sites WHERE id = $1', [req.params.id]);
+    if (!before.rows[0]) return res.status(404).json({ error: 'Site not found' });
     const { rows } = await query(
       `UPDATE sites SET
          name = COALESCE($2, name),
@@ -86,7 +116,7 @@ async function updateSite(req, res, next) {
     );
     if (!rows[0]) return res.status(404).json({ error: 'Site not found' });
     await logAction({ req, action: 'UPDATE', tableName: 'sites', recordId: rows[0].id,
-      siteId: rows[0].id, newValues: rows[0] });
+      siteId: rows[0].id, oldValues: before.rows[0], newValues: rows[0] });
     res.json({ site: rows[0] });
   } catch (err) {
     next(err);

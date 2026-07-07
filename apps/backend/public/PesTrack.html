@@ -106,7 +106,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="hbtn blue" id="btn-export" onclick="exportFindings()" title="Export all findings with photos — use this to back up and share">📤 Export JSON</button>
     <button class="hbtn blue" onclick="triggerImport()" title="Import findings from a previously exported JSON">📥 Import JSON</button>
     <button class="hbtn" style="background:#7C3AED;color:#fff;border-color:#7C3AED" onclick="openPdfSortModal()">📋 PDF Report</button>
-    <button class="hbtn" style="background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
+    <button class="hbtn" id="btn-parcels" style="background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
     <input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importFindings(this)">
     <input type="file" id="parcel-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="importParcelsXlsx(this)">
     <div id="user-menu-wrap" style="position:relative;display:none">
@@ -649,7 +649,7 @@ function importParcelsXlsx(input){
 window.importParcelsXlsx = importParcelsXlsx;
 
 function updateParcelBadge(){
-  const btn = document.querySelector('[onclick*="parcel-xlsx-input"]');
+  const btn = document.getElementById('btn-parcels');
   if(!btn) return;
   const n = (window._PARCELS||[]).filter(p=>!p.name.includes('General')).length;
   // Show the loaded parcel count on the button when parcels exist; otherwise
@@ -696,6 +696,7 @@ let constrZones = [];       // [{czId, lat, lng}]
 let pendingFindingLL = null;
 let editingLocId = null;
 let editingVisitId = null;  // set when editing an existing visit
+let editingVisitUpdatedAt = null;  // optimistic-lock token for the visit being edited
 let selectedCat = 'stp_trench';
 let selectedStat = 'open';
 let pendingPhotos = [];
@@ -872,7 +873,7 @@ function injectModals(){
         <button class="stat-btn resolved" id="sb-resolved" onclick="setFiStat('resolved',this)">🟢 Resolved</button>
       </div>
       <label>Label (short)</label>
-      <input id="fi-lbl" placeholder="e.g. Blocked drain NE corner…">
+      <input id="fi-lbl" maxlength="255" placeholder="e.g. Blocked drain NE corner…">
       <label>Date of inspection</label>
       <input id="fi-date" type="date">
       <label>Observations, Recommendations & Action</label>
@@ -1067,7 +1068,11 @@ function makeConstrIcon(){
 
 function renderConstrZone(cz){
   const marker = L.marker([cz.lat, cz.lng], {icon: makeConstrIcon()});
-  marker.on('click', ()=> deleteConstrZone(cz.czId));
+  // Clicking a zone removes it — but only for users allowed to modify it
+  // (admin: any; engineer: own; client_viewer: none). Others get a plain marker.
+  if (canModifyItem()) {
+    marker.on('click', ()=> deleteConstrZone(cz.czId));
+  }
   marker._czId = cz.czId;
   constrLayer.addLayer(marker);
 }
@@ -1155,6 +1160,7 @@ function editVisit(locId, visitId){
   if(!loc||!visit) return;
   editingLocId   = locId;
   editingVisitId = visitId;
+  editingVisitUpdatedAt = visit.updatedAt || null;  // capture for optimistic lock
   pendingFindingLL = null;
   // Pre-fill photos from the visit
   pendingPhotos = [...(visit.photos||[])];
@@ -1196,6 +1202,7 @@ function closeFiModal(){
   pendingFindingLL = null;
   editingLocId = null;
   editingVisitId = null;
+  editingVisitUpdatedAt = null;
 }
 window.closeFiModal = closeFiModal;
 
@@ -1308,6 +1315,23 @@ function saveFinding(){
 
   const token = localStorage.getItem('pt_admin_token');
 
+  const okBtn = document.querySelector('.mbtns .bok');
+  const cancelBtn = document.querySelector('.mbtns .bcancel');
+  const originalOkText = okBtn ? okBtn.innerHTML : 'Save Finding';
+  if (okBtn) {
+    okBtn.disabled = true;
+    okBtn.innerHTML = '<span style="display:inline-block;animation:save-spin 1s linear infinite;margin-right:6px">⏳</span>Saving...';
+    if (!document.getElementById('save-spin-style')) {
+      const style = document.createElement('style');
+      style.id = 'save-spin-style';
+      style.textContent = '@keyframes save-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    }
+  }
+  if (cancelBtn) {
+    cancelBtn.disabled = true;
+  }
+
   // Upload any locally-held (base64) photos to S3 now, at save time. Entries
   // that are already S3 URLs (existing photos when editing) pass through
   // unchanged. Returns the final list of URLs to store on the visit.
@@ -1357,10 +1381,19 @@ function saveFinding(){
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token
       },
-      body: JSON.stringify({ siteId: currentSiteId, parcel_id: editParcelId, ...editCoords, ...visitPayload })
+      // expectedUpdatedAt drives optimistic locking on the server.
+      body: JSON.stringify({ siteId: currentSiteId, parcel_id: editParcelId, expectedUpdatedAt: editingVisitUpdatedAt, ...editCoords, ...visitPayload })
     })
     .then(res => {
       if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      // 409 = another user changed this finding first. Reload so the editor
+      // sees the latest data before re-applying their change.
+      if (res.status === 409) {
+        return res.json().catch(() => ({})).then(d => {
+          loadFindings();
+          throw new Error(d.error || 'This finding was changed by another user. Please reload and try again.');
+        });
+      }
       if (!res.ok) throw new Error('Failed to update visit');
     });
   } else if (editingLocId) {
@@ -1440,6 +1473,7 @@ function saveFinding(){
     pendingFindingLL = null;
     editingLocId = null;
     editingVisitId = null;
+    editingVisitUpdatedAt = null;
     pendingPhotos = [];
 
     loadFindings();
@@ -1449,6 +1483,13 @@ function saveFinding(){
   }) // end resolvePendingPhotos().then
   .catch(err => {
     console.error(err);
+    if (okBtn) {
+      okBtn.disabled = false;
+      okBtn.innerHTML = originalOkText;
+    }
+    if (cancelBtn) {
+      cancelBtn.disabled = false;
+    }
     // Upload OR save failure — the modal stays open so nothing is lost and the
     // user can retry. (Locally-held photos remain in pendingPhotos.)
     showNotif('❌ ' + (err && err.message ? err.message : 'Failed to save finding'), true, 4000);
@@ -1506,7 +1547,7 @@ function clearAllFindings(){
   }
   
   if(!findings.length){ showNotif('⚠️ No findings to clear', true, 2000); return; }
-  if(!confirm(`Clear all ${findings.length} finding(s)? This cannot be undone.`)) return;
+  if(!confirm('Clear all findings? This cannot be undone.')) return;
 
   const token = localStorage.getItem('pt_admin_token');
   showNotif('⏳ Clearing findings...', false, 0);
@@ -1622,12 +1663,20 @@ function renderAllFindings(){
 
 // ── Build popup HTML ───────────────────────────────────────────────
 // Photos use blob URLs (short, safe for innerHTML) from window._photoUrls
+// Can the signed-in user edit/delete findings/zones? Access is SITE-based: any
+// admin or engineer assigned to the current site may edit/delete every item on
+// it (creator doesn't matter). Client viewers are read-only.
+function canModifyItem(){
+  if(!currentUser) return false;
+  return currentUser.role === 'admin' || currentUser.role === 'engineer';
+}
+
 function buildPopup(loc){
   const latest = loc.visits[0];
   const stat = STAT_CFG[latest.status] || STAT_CFG.open;
   const cat  = CATS.find(c=>c.id===latest.cat) || CATS[CATS.length-1];
-  
-  const isViewer = currentUser && currentUser.role === 'client_viewer';
+
+  const canAddVisit = canModifyItem();
 
   let timelineHTML = loc.visits.map(v => {
     const photos = v.photos || [];
@@ -1637,11 +1686,12 @@ function buildPopup(loc){
       const blobUrl = window._photoUrls[(v.id||'v')+'_'+pi] || p;
       return `<img src="${blobUrl}" class="fi-popup-photo" title="Click to enlarge" style="width:60px;height:45px;object-fit:cover;border-radius:3px;cursor:pointer;border:1px solid #ddd">`;
     }).join('');
-    
-    const actionButtons = isViewer ? '' : `
+
+    // Edit/delete only appear on visits the current user is allowed to modify.
+    const actionButtons = canModifyItem() ? `
       <button class="fi-del-btn" onclick="editVisit('${loc.locId}','${v.id}')">✏ edit</button>
       <button class="fi-del-btn" onclick="deleteVisit('${loc.locId}','${v.id}')">✕ delete</button>
-    `;
+    ` : '';
     
     return `<div class="fi-tl-entry">
       <div class="fi-tl-date">${v.date} — ${vc.label}</div>
@@ -1653,9 +1703,9 @@ function buildPopup(loc){
     </div>`;
   }).join('');
 
-  const addVisitButton = isViewer ? '' : `
+  const addVisitButton = canAddVisit ? `
     <button class="fi-add-btn" onclick="addVisitToLocation('${loc.locId}')">+ Add New Visit</button>
-  `;
+  ` : '';
 
   return `<div class="fi-popup">
     <div class="fi-pop-hdr" style="background:${stat.color}">#${parseInt(loc.refNum||'0',10)||loc.refNum||'?'} · ${cat.label} — ${latest.label||''}</div>
@@ -1783,6 +1833,8 @@ function loadFindings(){
             label: v.label || '',
             notes: v.notes || '',
             escalated: escalationIdToLabel[v.escalatedToId] || '',
+            createdById: v.createdById || null,
+            updatedAt: v.updatedAt || null,
             photos: v.photos || []
           };
         })
@@ -1817,7 +1869,8 @@ function loadConstrZones(){
     constrZones = data.zones.map(z => ({
       czId: z.id,
       lat: Number(z.lat),
-      lng: Number(z.lng)
+      lng: Number(z.lng),
+      createdById: z.createdById || null
     }));
     // Expose for the PDF generator (mirrors window._ptFindings). Without this,
     // window._ptConstrZones is undefined and construction zones never render in the PDF.
@@ -2068,7 +2121,7 @@ function applyPermissions(role) {
   const btnCz = document.getElementById('btn-cz');
   const btnExport = document.getElementById('btn-export');
   const btnImport = document.querySelector('button[onclick="triggerImport()"]');
-  const btnUpdateParcels = document.querySelector('button[onclick="triggerParcelUpload()"]');
+  const btnUpdateParcels = document.getElementById('btn-parcels');
 
   // Header profile menu: shows who's signed in and their role (so a client
   // viewer understands why edit controls are hidden) plus the logout action.

@@ -1,5 +1,5 @@
 const { query, withTransaction } = require('../config/database');
-const { logAction } = require('../services/auditService');
+const { logAction, resolveAuditValues } = require('../services/auditService');
 const { uploadPhoto, deletePhotos, presignKeys, toStorageKey } = require('../services/storageService');
 const {
   validate,
@@ -41,6 +41,8 @@ async function shapeFindings(locRows, visitRows, photoRows) {
       escalatedToId: v.escalated_to_id,
       statusId: v.status_id,
       createdBy: v.created_by_name || v.created_by_username || 'Unknown',
+      createdById: v.created_by, // used by the client to gate edit/delete buttons
+      updatedAt: v.updated_at,   // optimistic-lock token sent back on edit
       photos: await presignKeys(photosByVisit.get(v.id) || []),
     };
     if (!visitsByLoc.has(v.location_id)) visitsByLoc.set(v.location_id, []);
@@ -142,12 +144,15 @@ async function listFindings(req, res, next) {
 
     const locIds = locRows.map((l) => l.id);
     const visitParams = [locIds];
-    const visitWhere = 'location_id = ANY($1::uuid[])';
-    
+    // Site-scoped visibility: everyone with access to the site sees all findings
+    // on it, regardless of who created them (site access is enforced by the route
+    // middleware). Edit/delete rights are also site-based (see editVisit).
+    const visitWhere = 'v.location_id = ANY($1::uuid[])';
+
     const { rows: visitRows } = await query(
-      `SELECT v.*, u.full_name as created_by_name, u.username as created_by_username 
-       FROM visits v 
-       LEFT JOIN users u ON v.created_by = u.id 
+      `SELECT v.*, u.full_name as created_by_name, u.username as created_by_username
+       FROM visits v
+       LEFT JOIN users u ON v.created_by = u.id
        WHERE ${visitWhere} ORDER BY v.visit_date DESC, v.created_at DESC`,
       visitParams
     );
@@ -229,7 +234,21 @@ async function createFinding(req, res, next) {
       return location;
     });
 
-    await logAction({ req, action: 'CREATE', tableName: 'locations', recordId: created.id, siteId });
+    const firstVisit = created.visits[0];
+    const newValues = await resolveAuditValues({
+      lat: created.lat ? Number(created.lat) : null,
+      lng: created.lng ? Number(created.lng) : null,
+      parcel_id: created.parcel_id,
+      ref_num: created.ref_num,
+      visit_date: firstVisit.visitDate,
+      category_id: firstVisit.categoryId,
+      label: firstVisit.label,
+      notes: firstVisit.notes,
+      escalated_to_id: firstVisit.escalatedToId,
+      status_id: firstVisit.statusId,
+      photos: photos.map(p => toStorageKey(p)),
+    });
+    await logAction({ req, action: 'CREATE', tableName: 'locations', recordId: created.id, siteId, newValues });
     res.status(201).json({ message: 'Finding created', id: created.id, visitId: created.visits[0].id, finding: created });
   } catch (err) {
     next(err);
@@ -251,6 +270,7 @@ async function addVisit(req, res, next) {
     const visit = validateVisitInput(req.body);
     const photos = Array.isArray(req.body.photos) ? req.body.photos : [];
 
+    let updatedLoc = null;
     const newVisit = await withTransaction(async (client) => {
       const { rows } = await client.query(
         `INSERT INTO visits (location_id, visit_date, category_id, label, notes, escalated_to_id, status_id, created_by)
@@ -269,10 +289,31 @@ async function addVisit(req, res, next) {
       await setVisitPhotos(client, rows[0].id, photos, req.user.id);
       // Persist parcel / GPS changes made while adding a visit, if sent.
       await updateLocationFields(client, location.id, req.body);
+      const locRes = await client.query('SELECT * FROM locations WHERE id = $1', [location.id]);
+      updatedLoc = locRes.rows[0];
       return rows[0];
     });
 
-    await logAction({ req, action: 'CREATE', tableName: 'visits', recordId: newVisit.id, siteId });
+    const oldValues = await resolveAuditValues({
+      parcel_id: location.parcel_id,
+      lat: location.lat ? Number(location.lat) : null,
+      lng: location.lng ? Number(location.lng) : null,
+      photos: [],
+    });
+
+    const newValues = await resolveAuditValues({
+      visit_date: newVisit.visit_date,
+      category_id: newVisit.category_id,
+      label: newVisit.label,
+      notes: newVisit.notes,
+      escalated_to_id: newVisit.escalated_to_id,
+      status_id: newVisit.status_id,
+      parcel_id: updatedLoc.parcel_id,
+      lat: updatedLoc.lat ? Number(updatedLoc.lat) : null,
+      lng: updatedLoc.lng ? Number(updatedLoc.lng) : null,
+      photos: photos.map(p => toStorageKey(p)),
+    });
+    await logAction({ req, action: 'CREATE', tableName: 'visits', recordId: newVisit.id, siteId, oldValues, newValues });
     res.status(201).json({ message: 'Visit added', visitId: newVisit.id, visit: {
       id: newVisit.id,
       visitDate: formatDateStr(newVisit.visit_date),
@@ -297,35 +338,107 @@ async function editVisit(req, res, next) {
     const visit = validateVisitInput({ ...req.body, id: req.params.visitId });
     const photos = Array.isArray(req.body.photos) ? req.body.photos : [];
 
-    // Non-admins may only edit their own visits.
-    const ownClause = req.user.role !== 'admin' ? ' AND created_by = $9' : '';
+    // Site-based access: anyone who can write to this site (admin or an assigned
+    // engineer — enforced by the route middleware) may edit any visit on it.
+    const existing = await query(
+      'SELECT id FROM visits WHERE id = $1 AND location_id = $2',
+      [req.params.visitId, location.id]
+    );
+    if (!existing.rows[0]) return res.status(404).json({ error: 'Visit not found' });
+
+    // Optimistic locking: the client sends the updated_at it loaded. If the row
+    // has since changed (another engineer saved first), reject with 409 so we
+    // don't silently overwrite their edit. Omitted -> check skipped (older client).
+    const expectedUpdatedAt = req.body.expectedUpdatedAt;
+
+    let conflict = false;
+    let before = null;
+    let oldPhotos = [];
+    let updatedLoc = null;
     const updated = await withTransaction(async (client) => {
-      const params = [
-        visit.visitDate,
-        visit.categoryId,
-        visit.label || null,
-        visit.notes || null,
-        visit.escalatedToId || null,
-        visit.statusId,
-        req.params.visitId,
-        location.id,
-      ];
-      if (ownClause) params.push(req.user.id);
+      // Lock the row for the duration of the transaction so a concurrent edit
+      // can't slip in between our version check and our UPDATE. Grab the full
+      // row so the audit log can record the old values.
+      const cur = await client.query(
+        'SELECT * FROM visits WHERE id = $1 AND location_id = $2 FOR UPDATE',
+        [req.params.visitId, location.id]
+      );
+      if (!cur.rows[0]) return null;
+      if (expectedUpdatedAt &&
+          new Date(cur.rows[0].updated_at).getTime() !== new Date(expectedUpdatedAt).getTime()) {
+        conflict = true;
+        return null;
+      }
+      before = cur.rows[0];
+
+      // Fetch the old photos before updating them
+      const { rows: oldPhotoRows } = await client.query(
+        'SELECT photo_url FROM photos WHERE visit_id = $1',
+        [req.params.visitId]
+      );
+      oldPhotos = oldPhotoRows.map(r => r.photo_url);
+
       const { rows } = await client.query(
         `UPDATE visits SET visit_date=$1, category_id=$2, label=$3, notes=$4, escalated_to_id=$5, status_id=$6, updated_at=NOW()
-         WHERE id=$7 AND location_id=$8${ownClause} RETURNING *`,
-        params
+         WHERE id=$7 AND location_id=$8 RETURNING *`,
+        [
+          visit.visitDate,
+          visit.categoryId,
+          visit.label || null,
+          visit.notes || null,
+          visit.escalatedToId || null,
+          visit.statusId,
+          req.params.visitId,
+          location.id,
+        ]
       );
       if (!rows[0]) return null;
       await setVisitPhotos(client, rows[0].id, photos, req.user.id);
       // Persist parcel / GPS changes made in the edit dialog. Each field is only
       // updated when the client sends it, so omitting one leaves it unchanged.
       await updateLocationFields(client, location.id, req.body);
+      const locRes = await client.query('SELECT * FROM locations WHERE id = $1', [location.id]);
+      updatedLoc = locRes.rows[0];
       return rows[0];
     });
 
+    if (conflict) {
+      return res.status(409).json({
+        error: 'This finding was changed by another user while you were editing. Please reload and try again.',
+      });
+    }
+
     if (!updated) return res.status(404).json({ error: 'Visit not found' });
-    await logAction({ req, action: 'UPDATE', tableName: 'visits', recordId: req.params.visitId, siteId });
+    // Resolve reference ids (category/status/escalation) to labels so the audit
+    // log stores readable values instead of UUIDs.
+    const oldValues = before && await resolveAuditValues({
+      visit_date: before.visit_date,
+      category_id: before.category_id,
+      label: before.label,
+      notes: before.notes,
+      escalated_to_id: before.escalated_to_id,
+      status_id: before.status_id,
+      parcel_id: location.parcel_id,
+      lat: location.lat ? Number(location.lat) : null,
+      lng: location.lng ? Number(location.lng) : null,
+      photos: oldPhotos,
+    });
+    const newValues = await resolveAuditValues({
+      visit_date: updated.visit_date,
+      category_id: updated.category_id,
+      label: updated.label,
+      notes: updated.notes,
+      escalated_to_id: updated.escalated_to_id,
+      status_id: updated.status_id,
+      parcel_id: updatedLoc.parcel_id,
+      lat: updatedLoc.lat ? Number(updatedLoc.lat) : null,
+      lng: updatedLoc.lng ? Number(updatedLoc.lng) : null,
+      photos: photos.map(p => toStorageKey(p)),
+    });
+    await logAction({
+      req, action: 'UPDATE', tableName: 'visits', recordId: req.params.visitId, siteId,
+      oldValues, newValues,
+    });
     res.json({ message: 'Visit updated' });
   } catch (err) {
     next(err);
@@ -338,16 +451,11 @@ async function deleteVisit(req, res, next) {
     const location = await findLocation(req.params.locationId, siteId);
     if (!location) return res.status(404).json({ error: 'Finding not found' });
 
-    // Non-admins may only delete their own visits.
-    const params = [req.params.visitId, location.id];
-    let where = 'id = $1 AND location_id = $2';
-    if (req.user.role !== 'admin') {
-      params.push(req.user.id);
-      where += ` AND created_by = $${params.length}`;
-    }
+    // Site-based access: any admin/assigned engineer may delete any visit here.
     // Grab the visit's photo keys before the row (and its photos) are deleted.
     const photoKeys = await photoKeysForVisits([req.params.visitId]);
-    const { rowCount } = await query(`DELETE FROM visits WHERE ${where}`, params);
+    const { rowCount } = await query('DELETE FROM visits WHERE id = $1 AND location_id = $2',
+      [req.params.visitId, location.id]);
     if (!rowCount) return res.status(404).json({ error: 'Visit not found' });
     deletePhotos(photoKeys);
 
@@ -435,12 +543,12 @@ async function clearFindings(req, res, next) {
 async function listZones(req, res, next) {
   try {
     const siteId = req.query.siteId;
-    // All users with site access see all zones for that site.
-    const params = [siteId];
-    const where = 'site_id = $1';
+    // Site-scoped: everyone with site access sees all zones on the site.
     const { rows } = await query(
-      `SELECT id, lat, lng, created_at FROM construction_zones WHERE ${where} ORDER BY created_at DESC`,
-      params
+      `SELECT cz.id, cz.lat, cz.lng, cz.created_at, cz.created_by
+         FROM construction_zones cz
+        WHERE cz.site_id = $1 ORDER BY cz.created_at DESC`,
+      [siteId]
     );
     res.json({
       zones: rows.map((z) => ({
@@ -448,6 +556,7 @@ async function listZones(req, res, next) {
         lat: Number(z.lat),
         lng: Number(z.lng),
         createdAt: z.created_at,
+        createdById: z.created_by, // used by the client to gate delete
       })),
     });
   } catch (err) {
@@ -473,14 +582,11 @@ async function createZone(req, res, next) {
 async function deleteZone(req, res, next) {
   try {
     const siteId = req.query.siteId;
-    // Non-admins may only delete their own zones.
-    const params = [req.params.id, siteId];
-    let where = 'id = $1 AND site_id = $2';
-    if (req.user.role !== 'admin') {
-      params.push(req.user.id);
-      where += ` AND created_by = $${params.length}`;
-    }
-    const { rowCount } = await query(`DELETE FROM construction_zones WHERE ${where}`, params);
+    // Site-based access: any admin/assigned engineer may delete any zone here.
+    const { rowCount } = await query(
+      'DELETE FROM construction_zones WHERE id = $1 AND site_id = $2',
+      [req.params.id, siteId]
+    );
     if (!rowCount) return res.status(404).json({ error: 'Zone not found' });
     await logAction({ req, action: 'DELETE', tableName: 'construction_zones', recordId: req.params.id, siteId });
     res.json({ message: 'Zone deleted' });

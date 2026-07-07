@@ -1,14 +1,39 @@
 const bcrypt = require('bcrypt');
 const { query, withTransaction } = require('../config/database');
-const { logAction } = require('../services/auditService');
+const { logAction, resolveAuditValues } = require('../services/auditService');
 const { parsePagination, parseSort, buildResponse } = require('../utils/listQuery');
 const {
   validate, required, optional, isString, isBoolean, isArray,
-  minLen, maxLen, oneOf, isEmail,
+  minLen, maxLen, oneOf, noSpaces, isEmail,
 } = require('../utils/validate');
 
 const VALID_ROLES = ['admin', 'engineer', 'client_viewer'];
 const USER_SORT_COLS = ['u.full_name', 'u.username', 'u.email', 'u.role', 'u.is_active', 'u.created_at', 'u.last_login'];
+
+// Check username / email / full_name aren't already taken by ANOTHER user.
+// Case-insensitive. Returns a { field: message } map for any collisions, so the
+// caller can throw a 400 with per-field errors the modal renders inline.
+// `excludeId` skips the user being edited.
+async function findUserConflicts({ username, email, fullName }, excludeId = null) {
+  const fields = {};
+  const checks = [
+    ['username', username, 'username'],
+    ['email', email, 'email'],
+    ['full_name', fullName, 'fullName'],
+  ];
+  for (const [col, value, field] of checks) {
+    if (value == null || value === '') continue;
+    const params = [value];
+    let sql = `SELECT 1 FROM users WHERE LOWER(${col}) = LOWER($1)`;
+    if (excludeId) { params.push(excludeId); sql += ` AND id <> $2`; }
+    const { rowCount } = await query(sql + ' LIMIT 1', params);
+    if (rowCount) {
+      const label = field === 'fullName' ? 'full name' : field;
+      fields[field] = `This ${label} is already in use`;
+    }
+  }
+  return fields;
+}
 
 // Shared SELECT that includes assigned site ids + names.
 const USER_SELECT = `
@@ -73,15 +98,22 @@ async function getUser(req, res, next) {
 async function createUser(req, res, next) {
   try {
     validate(req.body, {
-      username: [required, isString, minLen(3), maxLen(100)],
-      email: [required, isEmail],
-      password: [required, isString, minLen(6)],
+      username: [required, isString, noSpaces, minLen(3), maxLen(100)],
+      email: [required, isEmail, maxLen(255)],
+      password: [required, isString, minLen(6), maxLen(255)],
       fullName: [optional, isString, maxLen(255)],
       role: [optional, isString, oneOf(VALID_ROLES)],
       isActive: [optional, isBoolean],
       siteIds: [optional, isArray],
     });
     const { username, email, password, fullName, role, isActive, siteIds } = req.body;
+
+    // Enforce unique username / email / full name with friendly per-field errors.
+    const conflicts = await findUserConflicts({ username, email, fullName });
+    if (Object.keys(conflicts).length) {
+      return res.status(400).json({ error: 'Some fields are already in use', fields: conflicts });
+    }
+
     const hash = await bcrypt.hash(password, 12);
 
     const user = await withTransaction(async (client) => {
@@ -112,7 +144,7 @@ async function createUser(req, res, next) {
 async function updateUser(req, res, next) {
   try {
     validate(req.body, {
-      email: [optional, isEmail],
+      email: [optional, isEmail, maxLen(255)],
       fullName: [optional, isString, maxLen(255)],
       role: [optional, isString, oneOf(VALID_ROLES)],
       isActive: [optional, isBoolean],
@@ -120,7 +152,30 @@ async function updateUser(req, res, next) {
     });
     const { email, fullName, role, isActive, siteIds } = req.body || {};
 
+    // Unique email / full name among OTHER users (exclude the one being edited).
+    const conflicts = await findUserConflicts({ email, fullName }, req.params.id);
+    if (Object.keys(conflicts).length) {
+      return res.status(400).json({ error: 'Some fields are already in use', fields: conflicts });
+    }
+
+    let before = null;
     const updated = await withTransaction(async (client) => {
+      // Snapshot the row (and its site assignments) before updating, for the audit log.
+      const cur = await client.query(
+        'SELECT email, full_name, role, is_active FROM users WHERE id = $1',
+        [req.params.id]
+      );
+      if (!cur.rows[0]) return null;
+      const curSites = await client.query('SELECT site_id FROM user_sites WHERE user_id = $1', [req.params.id]);
+      // Use the same field names as newValues so the diff compares like-for-like.
+      before = {
+        email: cur.rows[0].email,
+        fullName: cur.rows[0].full_name,
+        role: cur.rows[0].role,
+        isActive: cur.rows[0].is_active,
+        siteIds: curSites.rows.map((r) => r.site_id),
+      };
+
       const { rows } = await client.query(
         `UPDATE users SET
            email      = COALESCE($2, email),
@@ -149,27 +204,64 @@ async function updateUser(req, res, next) {
     });
 
     if (!updated) return res.status(404).json({ error: 'User not found' });
+    // Resolve site id arrays to site names for a readable audit trail.
+    const oldValues = before && await resolveAuditValues(before);
+    const newValues = await resolveAuditValues({ email, fullName, role, isActive, siteIds });
     await logAction({ req, action: 'UPDATE', tableName: 'users', recordId: updated.id,
-      newValues: { email, fullName, role, isActive, siteIds } });
+      oldValues, newValues });
     res.json({ user: updated });
   } catch (err) {
     next(err);
   }
 }
 
-// Soft-delete = deactivate (brief: deactivate / reactivate, never hard delete via UI).
+// Hard-delete a user — but ONLY when they have no work referencing them.
+// A freshly-created / just-assigned user (only user_sites rows, which cascade)
+// is removed permanently. If the user authored any visit, finding, construction
+// zone, photo, or audit entry, deletion is blocked with a reference message so
+// that history stays intact.
 async function deactivateUser(req, res, next) {
   try {
+    const userId = req.params.id;
+
+    const exists = await query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (!exists.rows[0]) return res.status(404).json({ error: 'User not found' });
+
+    // Count references in each table that would be orphaned by a delete.
     const { rows } = await query(
-      `UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1
-       RETURNING id, username, is_active`,
-      [req.params.id]
+      `SELECT
+         (SELECT COUNT(*) FROM visits             WHERE created_by  = $1)::int AS visits,
+         (SELECT COUNT(*) FROM locations          WHERE created_by  = $1)::int AS findings,
+         (SELECT COUNT(*) FROM construction_zones WHERE created_by  = $1)::int AS zones,
+         (SELECT COUNT(*) FROM photos             WHERE uploaded_by = $1)::int AS photos,
+         (SELECT COUNT(*) FROM audit_logs         WHERE user_id     = $1)::int AS audit`,
+      [userId]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
-    await logAction({ req, action: 'UPDATE', tableName: 'users', recordId: rows[0].id,
-      newValues: { is_active: false } });
-    res.json({ user: rows[0] });
+    const refs = rows[0];
+
+    // Build a human list of what's blocking deletion (skip audit — it's internal).
+    const blockers = [];
+    if (refs.findings) blockers.push(`${refs.findings} finding${refs.findings > 1 ? 's' : ''}`);
+    if (refs.visits) blockers.push(`${refs.visits} visit${refs.visits > 1 ? 's' : ''}`);
+    if (refs.zones) blockers.push(`${refs.zones} construction zone${refs.zones > 1 ? 's' : ''}`);
+    if (refs.photos) blockers.push(`${refs.photos} photo${refs.photos > 1 ? 's' : ''}`);
+
+    if (blockers.length || refs.audit) {
+      const detail = blockers.length
+        ? `This user has recorded ${blockers.join(', ')} and cannot be deleted. Their work must be preserved.`
+        : 'This user has recorded activity in the audit log and cannot be deleted.';
+      return res.status(409).json({ error: detail });
+    }
+
+    // No work references — safe to hard delete (user_sites cascades).
+    await logAction({ req, action: 'DELETE', tableName: 'users', recordId: userId });
+    await query('DELETE FROM users WHERE id = $1', [userId]);
+    res.json({ message: 'User deleted' });
   } catch (err) {
+    // Safety net for any FK we didn't explicitly check.
+    if (err.code === '23503') {
+      return res.status(409).json({ error: 'This user is referenced by existing records and cannot be deleted.' });
+    }
     next(err);
   }
 }

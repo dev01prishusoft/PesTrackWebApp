@@ -56,7 +56,7 @@ export function useSites(params: ListParams & { status?: string }) {
 export function useAllSites() {
   return useQuery({
     queryKey: ['admin_sites', 'all'],
-    queryFn: () => api<Paginated<Site>>(`/api/sites${qs({ page: 1, limit: 100 })}`),
+    queryFn: () => api<Paginated<Site>>(`/api/sites${qs({ page: 1, limit: 10000 })}`),
     select: (r) => r.data,
   });
 }
@@ -101,7 +101,7 @@ export function useAudit(
 export function useAllUsers() {
   return useQuery({
     queryKey: ['admin_users', 'all'],
-    queryFn: () => api<Paginated<User>>(`/api/users${qs({ page: 1, limit: 1000 })}`),
+    queryFn: () => api<Paginated<User>>(`/api/users${qs({ page: 1, limit: 10000 })}`),
     select: (r) => r.data,
   });
 }

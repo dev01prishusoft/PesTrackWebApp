@@ -17,7 +17,7 @@ import {
   useDeleteSite,
 } from '../api/queries';
 import type { Site } from '../lib/types';
-import { getToken } from '../../lib/api';
+import { getToken, ApiError } from '../../lib/api';
 import { MultiSelect } from '../components/ui/MultiSelect';
 
 const inputCls =
@@ -89,7 +89,6 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
       const zVal = parseInt(zoom, 10);
       if (isNaN(zVal) || zVal < 1 || zVal > 20) errors.zoom = 'Must be a valid integer between 1 and 20';
     }
-    if (userIds.length === 0) errors.users = 'At least one user must be assigned';
 
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setFieldErrors({});
@@ -130,18 +129,35 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 
       const toAssign = userIds.filter((id) => !initialUserIds.includes(id));
       const toRemove = initialUserIds.filter((id) => !userIds.includes(id));
-      for (const uId of toAssign) await assignUser.mutateAsync({ siteId: savedSiteId, userId: uId });
-      for (const uId of toRemove) await removeUser.mutateAsync({ siteId: savedSiteId, userId: uId });
+      // The site itself is already saved; a hiccup on an individual user
+      // assignment shouldn't keep the dialog open. Run them, collect failures.
+      const assignErrors: string[] = [];
+      for (const uId of toAssign) {
+        try { await assignUser.mutateAsync({ siteId: savedSiteId, userId: uId }); }
+        catch (e) { assignErrors.push((e as Error).message); }
+      }
+      for (const uId of toRemove) {
+        try { await removeUser.mutateAsync({ siteId: savedSiteId, userId: uId }); }
+        catch (e) { assignErrors.push((e as Error).message); }
+      }
+      if (assignErrors.length) {
+        // Surface but don't block — the site saved successfully.
+        console.warn('Some user assignments failed:', assignErrors);
+      }
 
       onClose();
     } catch (e) {
+      // Surface per-field conflicts (unique site name) inline.
+      if (e instanceof ApiError && e.fields) {
+        setFieldErrors((prev) => ({ ...prev, ...(e.fields as Record<string, string>) }));
+      }
       setErr((e as Error).message);
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl shadow-xl w-[620px] max-w-[94vw] max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-2xl shadow-xl w-[620px] max-w-[94vw] max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-bold m-0">{editing ? 'Edit Site' : 'New Site'}</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted"><X size={18} /></button>
@@ -153,7 +169,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
             <div>
               <label className={labelCls}>Site name <span className="text-destructive">*</span></label>
-              <input className={inputCls} value={name} onChange={(e) => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: '' })); }} placeholder="Site Name" />
+              <input className={inputCls} maxLength={255} value={name} onChange={(e) => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: '' })); }} placeholder="Site Name" />
               {fieldErrors.name && <p className="text-destructive text-xs mt-1">{fieldErrors.name}</p>}
             </div>
 
@@ -186,15 +202,14 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
             </div>
 
             <div>
-              <label className={labelCls}>Assigned users <span className="text-destructive">*</span></label>
+              <label className={labelCls}>Assigned users</label>
               <MultiSelect
                 options={userOptions}
                 selectedIds={userIds}
-                onChange={(ids) => { setUserIds(ids); setFieldErrors(prev => ({ ...prev, users: '' })); }}
+                onChange={setUserIds}
                 placeholder="Assign users to site..."
                 openDirection="up"
               />
-              {fieldErrors.users && <p className="text-destructive text-xs mt-1">{fieldErrors.users}</p>}
             </div>
           </div>
         </div>
@@ -209,7 +224,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 }
 
 export function SitesPage() {
-  const ls = useListState({ sort: 'name' });
+  const ls = useListState({ sort: 'created_at', order: 'desc' });
   const { data, isLoading, isError, error } = useSites(ls.params);
   const deleteSite = useDeleteSite();
   const confirm = useAdminConfirm();
@@ -226,13 +241,13 @@ export function SitesPage() {
       id: 'actions', header: 'Actions',
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <button onClick={() => setEditing(row.original)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors" aria-label="Edit" title="Edit">
+          <button onClick={() => setEditing(row.original)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors cursor-pointer" aria-label="Edit" title="Edit">
             <Pencil size={15} />
           </button>
           <button
             onClick={async () => {
               setActionErr('');
-              if (await confirm({ title: 'Delete Site', message: `Are you sure you want to delete ${row.original.name}? This action cannot be undone.`, confirmLabel: 'Delete', danger: true })) {
+              if (await confirm({ title: 'Delete Site', message: 'Are you sure you want to delete this site? This action cannot be undone.', confirmLabel: 'Delete', danger: true })) {
                 try {
                   await deleteSite.mutateAsync(row.original.id);
                 } catch (e) {
@@ -240,7 +255,7 @@ export function SitesPage() {
                 }
               }
             }}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors" aria-label="Delete" title="Delete"
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors cursor-pointer" aria-label="Delete" title="Delete"
           >
             <Trash2 size={15} />
           </button>
