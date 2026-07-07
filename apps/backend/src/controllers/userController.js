@@ -35,6 +35,19 @@ async function findUserConflicts({ username, email, fullName }, excludeId = null
   return fields;
 }
 
+// Turn a conflicts map into a single readable sentence naming the taken fields,
+// e.g. "This username is already in use." or
+// "This username and email are already in use."
+function conflictMessage(conflicts) {
+  const labels = Object.keys(conflicts).map((f) => (f === 'fullName' ? 'full name' : f));
+  const list =
+    labels.length <= 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+  const verb = labels.length > 1 ? 'are' : 'is';
+  return `This ${list} ${verb} already in use.`;
+}
+
 // Shared SELECT that includes assigned site ids + names.
 const USER_SELECT = `
   SELECT u.id, u.username, u.email, u.full_name, u.role, u.is_active,
@@ -111,7 +124,7 @@ async function createUser(req, res, next) {
     // Enforce unique username / email / full name with friendly per-field errors.
     const conflicts = await findUserConflicts({ username, email, fullName });
     if (Object.keys(conflicts).length) {
-      return res.status(400).json({ error: 'Some fields are already in use', fields: conflicts });
+      return res.status(400).json({ error: conflictMessage(conflicts), fields: conflicts });
     }
 
     const hash = await bcrypt.hash(password, 12);
@@ -155,7 +168,7 @@ async function updateUser(req, res, next) {
     // Unique email / full name among OTHER users (exclude the one being edited).
     const conflicts = await findUserConflicts({ email, fullName }, req.params.id);
     if (Object.keys(conflicts).length) {
-      return res.status(400).json({ error: 'Some fields are already in use', fields: conflicts });
+      return res.status(400).json({ error: conflictMessage(conflicts), fields: conflicts });
     }
 
     let before = null;

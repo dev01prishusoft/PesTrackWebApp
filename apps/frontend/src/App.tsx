@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ConfirmProvider } from './components/ConfirmDialog';
+import { ToastProvider } from './components/Toast';
 // import { FrontendPage } from './pages/FrontendPage';
 import { AdminLayout } from './admin/AdminLayout';
 import { UsersPage } from './admin/pages/UsersPage';
@@ -95,9 +96,11 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <ConfirmProvider>
-            <NavigationRouter />
-          </ConfirmProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <NavigationRouter />
+            </ConfirmProvider>
+          </ToastProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { StatusBadge } from '../components/ui/badge';
 import { useListState } from '../hooks/useListState';
 import { useAdminConfirm } from '../components/AdminConfirmDialog';
+import { useToast } from '../../components/Toast';
 import {
   useSites,
   useCreateSite,
@@ -17,7 +18,7 @@ import {
   useDeleteSite,
 } from '../api/queries';
 import type { Site } from '../lib/types';
-import { getToken, ApiError } from '../../lib/api';
+import { getToken } from '../../lib/api';
 import { MultiSelect } from '../components/ui/MultiSelect';
 
 const inputCls =
@@ -26,6 +27,7 @@ const labelCls = 'block text-xs font-semibold text-muted-foreground mb-1';
 
 function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }) {
   const editing = !!site;
+  const toast = useToast();
   const create = useCreateSite();
   const update = useUpdateSite();
   const { data: allUsers } = useAllUsers();
@@ -37,7 +39,6 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const [lng, setLng] = useState(site?.map_center_lng?.toString() ?? '');
   const [zoom, setZoom] = useState(site?.default_zoom?.toString() ?? '14');
   const [file, setFile] = useState<File | null>(null);
-  const [err, setErr] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const initialUserIds = useMemo(() => {
@@ -67,7 +68,6 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   }, [allUsers]);
 
   async function save() {
-    setErr('');
     const errors: Record<string, string> = {};
 
     if (!name.trim()) errors.name = 'Site name is required';
@@ -140,18 +140,18 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
         try { await removeUser.mutateAsync({ siteId: savedSiteId, userId: uId }); }
         catch (e) { assignErrors.push((e as Error).message); }
       }
+      toast.success(editing ? 'Updated successfully.' : 'Saved successfully.');
       if (assignErrors.length) {
         // Surface but don't block — the site saved successfully.
         console.warn('Some user assignments failed:', assignErrors);
+        toast.warning('Site saved, but some user assignments could not be applied.');
       }
 
       onClose();
     } catch (e) {
-      // Surface per-field conflicts (unique site name) inline.
-      if (e instanceof ApiError && e.fields) {
-        setFieldErrors((prev) => ({ ...prev, ...(e.fields as Record<string, string>) }));
-      }
-      setErr((e as Error).message);
+      // Surface conflicts (e.g. duplicate site name) as a toast using the
+      // backend message — no inline field/banner error.
+      toast.error((e as Error).message);
     }
   }
 
@@ -164,7 +164,6 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {err && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm mb-4">{err}</div>}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
             <div>
@@ -228,8 +227,8 @@ export function SitesPage() {
   const { data, isLoading, isError, error } = useSites(ls.params);
   const deleteSite = useDeleteSite();
   const confirm = useAdminConfirm();
+  const toast = useToast();
   const [editing, setEditing] = useState<Site | null | undefined>(undefined);
-  const [actionErr, setActionErr] = useState('');
 
   const columns = useMemo<ColumnDef<Site, unknown>[]>(() => [
     { id: 'name', header: 'Name', accessorKey: 'name' },
@@ -246,12 +245,13 @@ export function SitesPage() {
           </button>
           <button
             onClick={async () => {
-              setActionErr('');
               if (await confirm({ title: 'Delete Site', message: 'Are you sure you want to delete this site? This action cannot be undone.', confirmLabel: 'Delete', danger: true })) {
                 try {
                   await deleteSite.mutateAsync(row.original.id);
+                  toast.success('Deleted successfully.');
                 } catch (e) {
-                  setActionErr((e as Error).message);
+                  // 409 -> site is referenced by users/parcels/findings; keep it as a warning.
+                  toast.warning((e as Error).message);
                 }
               }
             }}
@@ -262,6 +262,7 @@ export function SitesPage() {
         </div>
       ),
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
   return (
@@ -270,7 +271,6 @@ export function SitesPage() {
         <SearchInput value={ls.search} onChange={ls.changeSearch} placeholder="Search name or slug…" />
         <Button className="ml-auto" onClick={() => setEditing(null)}><Plus size={16} /> New Site</Button>
       </div>
-      {actionErr && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{actionErr}</div>}
       {isError && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{(error as Error).message}</div>}
       <DataTable
         columns={columns}

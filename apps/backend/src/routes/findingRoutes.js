@@ -27,6 +27,7 @@ router.post('/findings/photos', canWrite, siteAccess, upload.array('files'), ctr
 
 // --- findings (locations + visits) ---
 router.get('/findings', siteAccess, ctrl.listFindings);
+router.get('/findings/:locationId', siteAccess, ctrl.getFinding);
 router.delete('/findings', requireAdmin, siteAccess, ctrl.clearFindings);
 router.post('/findings', canWrite, siteAccess, ctrl.createFinding);
 router.post('/findings/:locationId/visits', canWrite, siteAccess, ctrl.addVisit);

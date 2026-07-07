@@ -94,19 +94,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div id="app-container" style="display:none;">
 
 <div id="hdr">
-  <img id="hdr-logo" alt="PesTrack">
+  <img id="hdr-logo" src="/sotaico-logo.png" alt="PesTrack">
   <div class="vdiv"></div>
-  <select id="site-selector" onchange="changeSite(this.value)" style="background:#fff;color:#374151;border:1.5px solid #CBD5E1;border-radius:6px;padding:6px 10px;font-size:0.9rem;font-weight:600;font-family:inherit;outline:none;cursor:pointer;"></select>
-  <div class="hdr-right">
-    <button class="hbtn" id="btn-fi" onclick="startFindingsTool()">🔍 Add Finding</button>
-    <button class="hbtn" id="btn-cz" onclick="startConstrTool()" title="Drop a construction zone marker">🏗 Constr. Zone</button>
+  <!-- Hidden until sites load; revealed only when sites.length > 0 (see bootApp). -->
+  <select id="site-selector" onchange="changeSite(this.value)" style="display:none;background:#fff;color:#374151;border:1.5px solid #CBD5E1;border-radius:6px;padding:6px 10px;font-size:0.9rem;font-weight:600;font-family:inherit;outline:none;cursor:pointer;"></select>
+  <!-- The whole toolbar starts hidden and is revealed only after permissions are
+       applied and the sites dropdown is populated (see bootApp), so nothing flashes. -->
+  <div class="hdr-right" id="hdr-toolbar" style="display:none">
+    <!-- Permission-gated buttons start hidden and are revealed by applyPermissions()
+         once the user's role is known, so no button flashes before permissions load. -->
+    <button class="hbtn" id="btn-fi" style="display:none" onclick="startFindingsTool()">🔍 Add Finding</button>
+    <button class="hbtn" id="btn-cz" style="display:none" onclick="startConstrTool()" title="Drop a construction zone marker">🏗 Constr. Zone</button>
     <button class="hbtn" id="btn-hide-resolved" onclick="toggleHideResolved()" title="Show or hide resolved (green) findings">🟢 Hide Resolved</button>
     <button class="hbtn" id="btn-hide-constr" onclick="toggleHideConstr()" title="Show or hide construction zone icons">🚜 Hide Constr.</button>
     <button class="hbtn" id="btn-only-constr" onclick="toggleOnlyConstr()" title="Show only construction zones — hide findings">👁 Only Constr.</button>
-    <button class="hbtn blue" id="btn-export" onclick="exportFindings()" title="Export all findings with photos — use this to back up and share">📤 Export JSON</button>
-    <button class="hbtn blue" onclick="triggerImport()" title="Import findings from a previously exported JSON">📥 Import JSON</button>
+    <button class="hbtn blue" id="btn-export" style="display:none" onclick="exportFindings()" title="Export all findings with photos — use this to back up and share">📤 Export JSON</button>
+    <button class="hbtn blue" id="btn-import" style="display:none" onclick="triggerImport()" title="Import findings from a previously exported JSON">📥 Import JSON</button>
     <button class="hbtn" style="background:#7C3AED;color:#fff;border-color:#7C3AED" onclick="openPdfSortModal()">📋 PDF Report</button>
-    <button class="hbtn" id="btn-parcels" style="background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
+    <button class="hbtn" id="btn-parcels" style="display:none;background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
     <input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importFindings(this)">
     <input type="file" id="parcel-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="importParcelsXlsx(this)">
     <div id="user-menu-wrap" style="position:relative;display:none">
@@ -174,12 +179,14 @@ function showNotif(msg, err=false, dur=3000){
   n.textContent=msg; n.style.display='block';
   n.style.background=err?'#c0392b':'#1C2333';
   clearTimeout(notifTimer);
+  // Error messages always stay 6 seconds so they're not missed. Non-error
+  // messages keep their caller-specified duration (dur=0 = stay until replaced).
+  if(err) dur=6000;
   if(dur>0) notifTimer=setTimeout(()=>n.style.display='none',dur);
 }
 
 function init(){
-  const hl=document.getElementById('hdr-logo');
-  hl.src=LOGO_PESTRACK; hl.style.height='52px';
+  // Header logo is set in the markup (src="/sotaico-logo.png") and sized via CSS.
 
   map = L.map('map',{center:[27.3949,33.6782],zoom:14,zoomControl:true});
 
@@ -598,7 +605,7 @@ function loadParcels() {
       lng: p.lng ? Number(p.lng) : null
     }));
     if (window._PARCELS.length === 0) {
-      showNotif('⚠️ No parcels found for this site — upload parcels via "📂 Update Parcels".', true, 5000);
+      showNotif('⚠️ No parcels found for this site — upload parcels via "📂 Update Parcels".', true, 6000);
     }
     buildParcelSelect();
     updateParcelBadge();
@@ -696,7 +703,7 @@ let constrZones = [];       // [{czId, lat, lng}]
 let pendingFindingLL = null;
 let editingLocId = null;
 let editingVisitId = null;  // set when editing an existing visit
-let editingVisitUpdatedAt = null;  // optimistic-lock token for the visit being edited
+let editingVisitUpdatedAt = null;  // last-modified time of the visit being edited
 let selectedCat = 'stp_trench';
 let selectedStat = 'open';
 let pendingPhotos = [];
@@ -940,7 +947,7 @@ function injectModals(){
 // message) when no site is assigned/selected, so the caller can bail out.
 function requireSite(){
   if (!currentSiteId) {
-    showNotif('⚠️ No site assigned to your account — please contact an administrator.', true, 5000);
+    showNotif('⚠️ No site assigned to your account — please contact an administrator.', true, 6000);
     return true;
   }
   return false;
@@ -1043,12 +1050,25 @@ function deleteConstrZone(czId){
   })
   .then(res => {
     if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    // 404 = the zone was already deleted by another user. Refresh to drop the
+    // ghost marker, then show the "already deleted" message.
+    if (res.status === 404) {
+      return res.json().catch(() => ({})).then(d => {
+        const err = new Error(d.error || 'This record was already deleted by another user.');
+        err.recordDeleted = true;
+        throw err;
+      });
+    }
     if (!res.ok) throw new Error('Failed to delete zone');
     loadConstrZones();
     showNotif('🗑 Construction zone removed');
   })
   .catch(err => {
     console.error(err);
+    if (err && err.recordDeleted) {
+      Promise.resolve(loadConstrZones()).then(() => showNotif('⚠️ ' + err.message, true, 6000));
+      return;
+    }
     showNotif('❌ Failed to remove construction zone', true, 3000);
   });
 }
@@ -1154,13 +1174,59 @@ function addVisitToLocation(locId){
 window.addVisitToLocation = addVisitToLocation;
 
 // ── Edit existing visit ────────────────────────────────────────────
+// Opening the editor re-fetches the finding from the server so we work off the
+// latest data. If it's gone (another user deleted it), we don't open the dialog —
+// we show the "already deleted" message and refresh the map instead.
 function editVisit(locId, visitId){
-  const loc   = findings.find(f=>f.locId===locId);
-  const visit = loc && loc.visits.find(v=>v.id===visitId);
-  if(!loc||!visit) return;
+  const token = localStorage.getItem('pt_admin_token');
+  fetch('/api/findings/' + encodeURIComponent(locId) + '?siteId=' + encodeURIComponent(currentSiteId), {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (res.status === 404) {
+      return res.json().catch(() => ({})).then(d => {
+        const err = new Error(d.error || 'This record was already deleted by another user.');
+        err.recordDeleted = true;
+        throw err;
+      });
+    }
+    if (!res.ok) throw new Error('Failed to open finding');
+    return res.json();
+  })
+  .then(data => {
+    const fresh = mapApiFinding(data.finding);
+    // Merge the freshly-loaded finding into the local list so the map + editor agree.
+    const idx = findings.findIndex(f => f.locId === locId);
+    if (idx >= 0) findings[idx] = fresh; else findings.push(fresh);
+    const visit = fresh.visits.find(v => v.id === visitId);
+    if (!visit) {
+      // The finding still exists but this specific visit was deleted. Show the
+      // message AFTER the refresh so loadFindings' own notif doesn't clobber it.
+      Promise.resolve(loadFindings()).then(() =>
+        showNotif('⚠️ This record was already deleted by another user.', true, 6000)
+      );
+      return;
+    }
+    openEditVisitDialog(fresh, visit);
+  })
+  .catch(err => {
+    console.error(err);
+    if (err && err.recordDeleted) {
+      Promise.resolve(loadFindings()).then(() => showNotif('⚠️ ' + err.message, true, 6000));
+      return;
+    }
+    showNotif('❌ ' + (err && err.message ? err.message : 'Failed to open finding'), true, 3000);
+  });
+}
+window.editVisit = editVisit;
+
+// Populate and show the edit dialog from an already-loaded finding + visit.
+function openEditVisitDialog(loc, visit){
+  const locId = loc.locId, visitId = visit.id;
   editingLocId   = locId;
   editingVisitId = visitId;
-  editingVisitUpdatedAt = visit.updatedAt || null;  // capture for optimistic lock
+  editingVisitUpdatedAt = visit.updatedAt || null;  // last-modified time of the edited visit
   pendingFindingLL = null;
   // Pre-fill photos from the visit
   pendingPhotos = [...(visit.photos||[])];
@@ -1185,7 +1251,6 @@ function editVisit(locId, visitId){
   document.getElementById('m-fi').style.display = 'flex';
   map.closePopup();
 }
-window.editVisit = editVisit;
 
 function setFiStat(stat, btn){
   selectedStat = stat;
@@ -1382,16 +1447,18 @@ function saveFinding(){
         'Authorization': 'Bearer ' + token
       },
       // expectedUpdatedAt drives optimistic locking on the server.
-      body: JSON.stringify({ siteId: currentSiteId, parcel_id: editParcelId, expectedUpdatedAt: editingVisitUpdatedAt, ...editCoords, ...visitPayload })
+      body: JSON.stringify({ siteId: currentSiteId, parcel_id: editParcelId, ...editCoords, ...visitPayload })
     })
     .then(res => {
       if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
-      // 409 = another user changed this finding first. Reload so the editor
-      // sees the latest data before re-applying their change.
-      if (res.status === 409) {
+      // 404 = the record was deleted by another user while this editor had it
+      // open. Close the stale modal, refresh to drop the ghost marker, and tell
+      // the user their edit couldn't be saved because the record is gone.
+      if (res.status === 404) {
         return res.json().catch(() => ({})).then(d => {
-          loadFindings();
-          throw new Error(d.error || 'This finding was changed by another user. Please reload and try again.');
+          const err = new Error(d.error || 'This record was already deleted by another user.');
+          err.recordDeleted = true;
+          throw err;
         });
       }
       if (!res.ok) throw new Error('Failed to update visit');
@@ -1407,6 +1474,14 @@ function saveFinding(){
     })
     .then(res => {
       if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+      // 404 = the parent finding was deleted by another user meanwhile.
+      if (res.status === 404) {
+        return res.json().catch(() => ({})).then(d => {
+          const err = new Error(d.error || 'This record was already deleted by another user.');
+          err.recordDeleted = true;
+          throw err;
+        });
+      }
       if (!res.ok) throw new Error('Failed to add visit');
     });
   } else {
@@ -1435,7 +1510,7 @@ function saveFinding(){
     const parcelId = pObj ? pObj.id : null;
     if (assignedParcel && !parcelId) {
       console.warn('Parcel "' + assignedParcel + '" not found in DB parcels — saving without parcel_id.');
-      showNotif('⚠️ Parcel "' + assignedParcel + '" is not in the database — finding saved without a parcel link.', true, 5000);
+      showNotif('⚠️ Parcel "' + assignedParcel + '" is not in the database — finding saved without a parcel link.', true, 6000);
     }
     
     const maxRef = findings.reduce((mx,f)=>{ const n=parseInt(f.refNum,10)||0; return n>mx?n:mx; }, 0);
@@ -1489,6 +1564,23 @@ function saveFinding(){
     }
     if (cancelBtn) {
       cancelBtn.disabled = false;
+    }
+    // The record was deleted by another user: retrying can't help, so close the
+    // stale modal and refresh the map to get the latest data. Show the message
+    // longer since it asks the user to take note.
+    if (err && err.recordDeleted) {
+      document.getElementById('m-fi').style.display = 'none';
+      findingsTool = false;
+      if(document.getElementById('btn-fi')) document.getElementById('btn-fi').classList.remove('on');
+      if(typeof map !== 'undefined' && map) map.getContainer().style.cursor = '';
+      pendingFindingLL = null;
+      editingLocId = null;
+      editingVisitId = null;
+      editingVisitUpdatedAt = null;
+      pendingPhotos = [];
+      // Show AFTER the refresh so loadFindings' own notif doesn't clobber it.
+      Promise.resolve(loadFindings()).then(() => showNotif('⚠️ ' + err.message, true, 6000));
+      return;
     }
     // Upload OR save failure — the modal stays open so nothing is lost and the
     // user can retry. (Locally-held photos remain in pendingPhotos.)
@@ -1795,11 +1887,49 @@ function saveFindings() {
   // Replaced by granular REST calls
 }
 
+// Translate one API finding (nested location + visits) into the local shape the
+// map/editor use (cat/status/date/parcel names). Shared by loadFindings() and
+// editVisit() so the field mapping lives in one place.
+function mapApiFinding(f){
+  const pObj = parcels.find(p => p.id === f.parcel_id);
+  const parcelName = pObj ? pObj.parcel_name : '';
+
+  return {
+    locId: f.id,
+    lat: Number(f.lat),
+    lng: Number(f.lng),
+    refNum: f.ref_num,
+    parcel: parcelName,
+    visits: f.visits.map(v => {
+      const catLabel = categoryIdToLabel[v.categoryId];
+      const legacyCat = Object.keys(CATEGORY_MAP).find(k => CATEGORY_MAP[k] === catLabel) || 'other';
+
+      const statusLabel = statusIdToLabel[v.statusId];
+      const legacyStatus = Object.keys(STATUS_MAP).find(k => STATUS_MAP[k] === statusLabel) || 'open';
+
+      return {
+        id: v.id,
+        date: v.visitDate,
+        cat: legacyCat,
+        status: legacyStatus,
+        label: v.label || '',
+        notes: v.notes || '',
+        escalated: escalationIdToLabel[v.escalatedToId] || '',
+        createdById: v.createdById || null,
+        updatedAt: v.updatedAt || null,
+        photos: v.photos || []
+      };
+    })
+  };
+}
+
 function loadFindings(){
-  if (!currentSiteId) return;
+  if (!currentSiteId) return Promise.resolve();
   const token = localStorage.getItem('pt_admin_token');
   showNotif('⏳ Loading findings...', false, 0);
-  fetch('/api/findings?siteId=' + currentSiteId, {
+  // Return the promise so callers can chain a message that must appear AFTER
+  // the "✅ Findings loaded" notification (otherwise loadFindings overwrites it).
+  return fetch('/api/findings?siteId=' + currentSiteId, {
     headers: { 'Authorization': 'Bearer ' + token }
   })
   .then(res => {
@@ -1808,38 +1938,7 @@ function loadFindings(){
     return res.json();
   })
   .then(data => {
-    findings = data.findings.map(f => {
-      const pObj = parcels.find(p => p.id === f.parcel_id);
-      const parcelName = pObj ? pObj.parcel_name : '';
-      
-      return {
-        locId: f.id,
-        lat: Number(f.lat),
-        lng: Number(f.lng),
-        refNum: f.ref_num,
-        parcel: parcelName,
-        visits: f.visits.map(v => {
-          const catLabel = categoryIdToLabel[v.categoryId];
-          const legacyCat = Object.keys(CATEGORY_MAP).find(k => CATEGORY_MAP[k] === catLabel) || 'other';
-          
-          const statusLabel = statusIdToLabel[v.statusId];
-          const legacyStatus = Object.keys(STATUS_MAP).find(k => STATUS_MAP[k] === statusLabel) || 'open';
-          
-          return {
-            id: v.id,
-            date: v.visitDate,
-            cat: legacyCat,
-            status: legacyStatus,
-            label: v.label || '',
-            notes: v.notes || '',
-            escalated: escalationIdToLabel[v.escalatedToId] || '',
-            createdById: v.createdById || null,
-            updatedAt: v.updatedAt || null,
-            photos: v.photos || []
-          };
-        })
-      };
-    });
+    findings = data.findings.map(mapApiFinding);
     window._ptFindings = findings;
     renderAllFindings();
     showNotif('✅ Findings loaded');
@@ -1855,9 +1954,9 @@ function saveConstrZones() {
 }
 
 function loadConstrZones(){
-  if (!currentSiteId) return;
+  if (!currentSiteId) return Promise.resolve();
   const token = localStorage.getItem('pt_admin_token');
-  fetch('/api/zones?siteId=' + currentSiteId, {
+  return fetch('/api/zones?siteId=' + currentSiteId, {
     headers: { 'Authorization': 'Bearer ' + token }
   })
   .then(res => {
@@ -1886,6 +1985,11 @@ function loadConstrZones(){
 function showLogin() {
   document.getElementById('login-container').style.display = 'flex';
   document.getElementById('app-container').style.display = 'none';
+  // Re-hide the toolbar + site dropdown so the next login reveals them only after data loads.
+  const toolbar = document.getElementById('hdr-toolbar');
+  if (toolbar) toolbar.style.display = 'none';
+  const picker = document.getElementById('site-selector');
+  if (picker) picker.style.display = 'none';
 }
 
 function hideLogin() {
@@ -2078,9 +2182,9 @@ function bootApp() {
   .then(sitesData => {
     sites = sitesData.data || [];
 
-    // Always apply role permissions (hide/show header buttons) and initialize
-    // the map, even when the user has no assigned sites — otherwise the toolbar
-    // keeps its default (all-buttons-visible) state and the map never renders.
+    // Always apply role permissions (reveal the allowed header buttons — they
+    // start hidden) and initialize the map, even when the user has no assigned
+    // sites — otherwise the gated buttons stay hidden and the map never renders.
     const userRole = currentUser ? currentUser.role : 'client_viewer';
     applyPermissions(userRole);
 
@@ -2092,6 +2196,13 @@ function bootApp() {
       opt.textContent = s.name;
       picker.appendChild(opt);
     });
+    // Only show the dropdown once there are sites to pick from.
+    picker.style.display = sites.length > 0 ? '' : 'none';
+
+    // Permissions applied and sites bound → now reveal the toolbar as a whole,
+    // so buttons appear all at once (no flash of all buttons before hiding).
+    const toolbar = document.getElementById('hdr-toolbar');
+    if (toolbar) toolbar.style.display = '';
 
     if (typeof map === 'undefined' || !map) {
       init();
@@ -2113,6 +2224,10 @@ function bootApp() {
   .catch(err => {
     console.error(err);
     showNotif('❌ Failed to initialize app', true, 5000);
+    // Reveal the toolbar even on failure so the always-available controls work.
+    // Gated buttons stay hidden (safe default) since permissions never applied.
+    const toolbar = document.getElementById('hdr-toolbar');
+    if (toolbar) toolbar.style.display = '';
   });
 }
 
@@ -2120,7 +2235,7 @@ function applyPermissions(role) {
   const btnFi = document.getElementById('btn-fi');
   const btnCz = document.getElementById('btn-cz');
   const btnExport = document.getElementById('btn-export');
-  const btnImport = document.querySelector('button[onclick="triggerImport()"]');
+  const btnImport = document.getElementById('btn-import');
   const btnUpdateParcels = document.getElementById('btn-parcels');
 
   // Header profile menu: shows who's signed in and their role (so a client

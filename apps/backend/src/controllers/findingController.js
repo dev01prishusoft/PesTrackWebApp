@@ -19,6 +19,11 @@ const formatDateStr = (d) => {
 
 const VISIT_STATUSES = ['open', 'repeat', 'resolved'];
 
+// Sent whenever the record being edited/updated no longer exists (another user
+// deleted it first). The client uses `code: 'DELETED'` to close the stale editor,
+// refresh the data, and tell the user their change couldn't be saved.
+const DELETED_MESSAGE = 'This record was already deleted by another user.';
+
 // --- shape helpers ---------------------------------------------------------
 
 // DB rows -> the nested Finding[] shape the frontend map expects.
@@ -42,7 +47,7 @@ async function shapeFindings(locRows, visitRows, photoRows) {
       statusId: v.status_id,
       createdBy: v.created_by_name || v.created_by_username || 'Unknown',
       createdById: v.created_by, // used by the client to gate edit/delete buttons
-      updatedAt: v.updated_at,   // optimistic-lock token sent back on edit
+      updatedAt: v.updated_at,   // last-modified time, shown to the client
       photos: await presignKeys(photosByVisit.get(v.id) || []),
     };
     if (!visitsByLoc.has(v.location_id)) visitsByLoc.set(v.location_id, []);
@@ -173,6 +178,44 @@ async function listFindings(req, res, next) {
   }
 }
 
+// Fetch a single finding (location + its visits + photos) in the same nested
+// shape as listFindings. The editor calls this when opening the edit dialog so
+// it works off the latest data; a 404 with code 'DELETED' means another user
+// removed the record, and the client shows the "already deleted" message.
+async function getFinding(req, res, next) {
+  try {
+    const siteId = req.query.siteId;
+    const { rows: locRows } = await query(
+      'SELECT * FROM locations WHERE id = $1 AND site_id = $2',
+      [req.params.locationId, siteId]
+    );
+    if (!locRows.length) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
+
+    const { rows: visitRows } = await query(
+      `SELECT v.*, u.full_name as created_by_name, u.username as created_by_username
+         FROM visits v
+         LEFT JOIN users u ON v.created_by = u.id
+        WHERE v.location_id = $1
+        ORDER BY v.visit_date DESC, v.created_at DESC`,
+      [locRows[0].id]
+    );
+    // A finding with no visits left is effectively gone from the map, so treat
+    // it the same as deleted for the editor.
+    if (!visitRows.length) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
+
+    const visitIds = visitRows.map((v) => v.id);
+    const { rows: photoRows } = await query(
+      'SELECT visit_id, photo_url FROM photos WHERE visit_id = ANY($1::uuid[])',
+      [visitIds]
+    );
+
+    const [finding] = await shapeFindings(locRows, visitRows, photoRows);
+    res.json({ finding });
+  } catch (err) {
+    next(err);
+  }
+}
+
 function validateVisitInput(body) {
   return validate(body, {
     visitDate: [required, isString, maxLen(20)],
@@ -265,7 +308,7 @@ async function addVisit(req, res, next) {
   try {
     const siteId = req.body.siteId;
     const location = await findLocation(req.params.locationId, siteId);
-    if (!location) return res.status(404).json({ error: 'Finding not found' });
+    if (!location) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
 
     const visit = validateVisitInput(req.body);
     const photos = Array.isArray(req.body.photos) ? req.body.photos : [];
@@ -333,7 +376,7 @@ async function editVisit(req, res, next) {
   try {
     const siteId = req.body.siteId;
     const location = await findLocation(req.params.locationId, siteId);
-    if (!location) return res.status(404).json({ error: 'Finding not found' });
+    if (!location) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
 
     const visit = validateVisitInput({ ...req.body, id: req.params.visitId });
     const photos = Array.isArray(req.body.photos) ? req.body.photos : [];
@@ -344,31 +387,27 @@ async function editVisit(req, res, next) {
       'SELECT id FROM visits WHERE id = $1 AND location_id = $2',
       [req.params.visitId, location.id]
     );
-    if (!existing.rows[0]) return res.status(404).json({ error: 'Visit not found' });
+    if (!existing.rows[0]) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
 
-    // Optimistic locking: the client sends the updated_at it loaded. If the row
-    // has since changed (another engineer saved first), reject with 409 so we
-    // don't silently overwrite their edit. Omitted -> check skipped (older client).
-    const expectedUpdatedAt = req.body.expectedUpdatedAt;
-
-    let conflict = false;
+    // Concurrency strategy: Last Write Wins. Engineers work across different areas
+    // of the site, so two people editing the same visit at once is rare in practice.
+    // We therefore accept the incoming edit unconditionally — no version check, no
+    // 409 conflict — and let the most recent save be the one that persists. The
+    // row is still locked FOR UPDATE below so each write is applied atomically
+    // (no interleaving with a concurrent write), and every write is captured in
+    // the audit log so an overwritten value is never lost from the record.
     let before = null;
     let oldPhotos = [];
     let updatedLoc = null;
     const updated = await withTransaction(async (client) => {
-      // Lock the row for the duration of the transaction so a concurrent edit
-      // can't slip in between our version check and our UPDATE. Grab the full
-      // row so the audit log can record the old values.
+      // Lock the row for the duration of the transaction so concurrent edits are
+      // serialized and applied one after another. Grab the full row so the audit
+      // log can record the old values.
       const cur = await client.query(
         'SELECT * FROM visits WHERE id = $1 AND location_id = $2 FOR UPDATE',
         [req.params.visitId, location.id]
       );
       if (!cur.rows[0]) return null;
-      if (expectedUpdatedAt &&
-          new Date(cur.rows[0].updated_at).getTime() !== new Date(expectedUpdatedAt).getTime()) {
-        conflict = true;
-        return null;
-      }
       before = cur.rows[0];
 
       // Fetch the old photos before updating them
@@ -402,13 +441,7 @@ async function editVisit(req, res, next) {
       return rows[0];
     });
 
-    if (conflict) {
-      return res.status(409).json({
-        error: 'This finding was changed by another user while you were editing. Please reload and try again.',
-      });
-    }
-
-    if (!updated) return res.status(404).json({ error: 'Visit not found' });
+    if (!updated) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
     // Resolve reference ids (category/status/escalation) to labels so the audit
     // log stores readable values instead of UUIDs.
     const oldValues = before && await resolveAuditValues({
@@ -568,12 +601,15 @@ async function createZone(req, res, next) {
   try {
     const siteId = req.body.siteId;
     const { rows } = await query(
-      `INSERT INTO construction_zones (site_id, lat, lng, created_by) VALUES ($1,$2,$3,$4) RETURNING id`,
+      `INSERT INTO construction_zones (site_id, lat, lng, created_by) VALUES ($1,$2,$3,$4) RETURNING id, lat, lng`,
       [siteId, req.body.lat, req.body.lng, req.user.id]
     );
-    const id = rows[0].id;
-    await logAction({ req, action: 'CREATE', tableName: 'construction_zones', recordId: id, siteId });
-    res.status(201).json({ message: 'Zone created', id });
+    const zone = rows[0];
+    await logAction({
+      req, action: 'CREATE', tableName: 'construction_zones', recordId: zone.id, siteId,
+      newValues: { lat: Number(zone.lat), lng: Number(zone.lng) },
+    });
+    res.status(201).json({ message: 'Zone created', id: zone.id });
   } catch (err) {
     next(err);
   }
@@ -583,12 +619,17 @@ async function deleteZone(req, res, next) {
   try {
     const siteId = req.query.siteId;
     // Site-based access: any admin/assigned engineer may delete any zone here.
-    const { rowCount } = await query(
-      'DELETE FROM construction_zones WHERE id = $1 AND site_id = $2',
+    // Grab the zone's coordinates before deleting so the audit log records them.
+    const { rows } = await query(
+      'DELETE FROM construction_zones WHERE id = $1 AND site_id = $2 RETURNING lat, lng',
       [req.params.id, siteId]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Zone not found' });
-    await logAction({ req, action: 'DELETE', tableName: 'construction_zones', recordId: req.params.id, siteId });
+    // Already gone (another user deleted it first) → same DELETED signal as findings.
+    if (!rows.length) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
+    await logAction({
+      req, action: 'DELETE', tableName: 'construction_zones', recordId: req.params.id, siteId,
+      oldValues: { lat: Number(rows[0].lat), lng: Number(rows[0].lng) },
+    });
     res.json({ message: 'Zone deleted' });
   } catch (err) {
     next(err);
@@ -617,6 +658,7 @@ async function uploadPhotos(req, res, next) {
 
 module.exports = {
   listFindings,
+  getFinding,
   createFinding,
   addVisit,
   editVisit,

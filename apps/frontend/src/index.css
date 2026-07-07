@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "leaflet/dist/leaflet.css";
 
 /* Reset and basic setup to match legacy exactly */

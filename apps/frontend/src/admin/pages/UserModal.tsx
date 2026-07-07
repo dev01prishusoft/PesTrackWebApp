@@ -5,7 +5,7 @@ import { MultiSelect } from '../components/ui/MultiSelect';
 import {
   useCreateUser, useUpdateUser, useResetPassword, useAllSites,
 } from '../api/queries';
-import { ApiError } from '../../lib/api';
+import { useToast } from '../../components/Toast';
 import type { User } from '../lib/types';
 
 const inputCls =
@@ -19,6 +19,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const resetPw = useResetPassword();
+  const toast = useToast();
 
   const [fullName, setFullName] = useState(user?.full_name ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
@@ -109,6 +110,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
           id: user!.id,
           body: { fullName, email, role, isActive, siteIds },
         });
+        toast.success('Updated successfully.');
       } else {
         await createUser.mutateAsync({
           username,
@@ -119,14 +121,13 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
           isActive,
           siteIds,
         });
+        toast.success('Saved successfully.');
       }
       onClose();
     } catch (e) {
-      // Surface per-field conflicts (unique username/email/full name) inline.
-      if (e instanceof ApiError && e.fields) {
-        setFieldErrors((prev) => ({ ...prev, ...(e.fields as Record<string, string>) }));
-      }
-      setErr((e as Error).message);
+      // Surface conflicts (duplicate username/email/full name) as a single toast
+      // — e.g. "Some fields are already in use" — instead of per-field inline text.
+      toast.error((e as Error).message);
     }
   }
 
@@ -153,7 +154,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
     try {
       await resetPw.mutateAsync({ id: user!.id, password: newPassword });
-      alert('Password reset successfully.');
+      toast.success('Password reset successfully.');
       setIsResettingPw(false);
       setNewPassword('');
       setConfirmNewPassword('');
@@ -179,7 +180,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Full name <span className="text-destructive">*</span></label>
-              <input className={inputCls} maxLength={255} value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => ({ ...prev, fullName: '' })); }} placeholder="Full Name" />
+              <input className={inputCls} maxLength={255} value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => ({ ...prev, fullName: '' })); }} placeholder="Full Name" autoComplete="off" name="new-fullname" />
               {fieldErrors.fullName && <p className="text-destructive text-xs mt-1">{fieldErrors.fullName}</p>}
             </div>
 
@@ -192,13 +193,15 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                 onChange={(e) => { if (!editing) { setUsername(e.target.value.replace(/\s/g, '')); setFieldErrors(prev => ({ ...prev, username: '' })); } }}
                 placeholder="username"
                 disabled={editing}
+                autoComplete="off"
+                name="new-username"
               />
               {fieldErrors.username && <p className="text-destructive text-xs mt-1">{fieldErrors.username}</p>}
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Email <span className="text-destructive">*</span></label>
-              <input className={inputCls} type="email" maxLength={255} value={email} onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: '' })); }} placeholder="email@example.com" />
+              <input className={inputCls} type="email" maxLength={255} value={email} onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: '' })); }} placeholder="email@example.com" autoComplete="off" name="new-email" />
               {fieldErrors.email && <p className="text-destructive text-xs mt-1">{fieldErrors.email}</p>}
             </div>
 
@@ -229,6 +232,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                       value={password}
                       onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: '' })); }}
                       placeholder="Enter initial password"
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -258,6 +262,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                       value={confirmPassword}
                       onChange={(e) => { setConfirmPassword(e.target.value); setFieldErrors(prev => ({ ...prev, confirmPassword: '' })); }}
                       placeholder="Confirm password"
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -330,6 +335,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                       value={newPassword}
                       onChange={(e) => { setNewPassword(e.target.value); setFieldErrors(prev => ({ ...prev, newPassword: '' })); }}
                       placeholder="Enter new password"
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -359,6 +365,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                       value={confirmNewPassword}
                       onChange={(e) => { setConfirmNewPassword(e.target.value); setFieldErrors(prev => ({ ...prev, confirmNewPassword: '' })); }}
                       placeholder="Confirm new password"
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"

@@ -8,6 +8,7 @@ import { StatusBadge } from '../components/ui/badge';
 import { useListState } from '../hooks/useListState';
 import { useUsers, useDeactivateUser } from '../api/queries';
 import { useAdminConfirm } from '../components/AdminConfirmDialog';
+import { useToast } from '../../components/Toast';
 import { UserModal } from './UserModal';
 import type { User } from '../lib/types';
 
@@ -16,12 +17,11 @@ export function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const { data, isLoading, isError, error } = useUsers({ ...ls.params, role: roleFilter || undefined });
   const [editing, setEditing] = useState<User | null | undefined>(undefined);
-  const [actionErr, setActionErr] = useState('');
   const deleteUser = useDeactivateUser();
   const confirm = useAdminConfirm();
+  const toast = useToast();
 
   async function handleDelete(user: User) {
-    setActionErr('');
     const ok = await confirm({
       title: 'Delete user?',
       message: 'This user will be permanently deleted. This can only be done if they have no recorded findings, visits, or construction zones.',
@@ -31,14 +31,17 @@ export function UsersPage() {
     if (!ok) return;
     try {
       await deleteUser.mutateAsync(user.id);
+      toast.success('Deleted successfully.');
     } catch (e) {
-      // 409 -> user has referenced work; show the reference message.
-      setActionErr((e as Error).message);
+      // 409 -> the user has recorded work that must be preserved, so the delete
+      // was blocked. Surface it as a warning (their data is safe), not an error.
+      toast.warning((e as Error).message);
     }
   }
 
   const columns = useMemo<ColumnDef<User, unknown>[]>(() => [
     { id: 'u.full_name', header: 'Name', accessorFn: (u) => u.full_name || '—' },
+    { id: 'u.username', header: 'Username', accessorFn: (u) => u.username || '—' },
     { id: 'u.email', header: 'Email', accessorKey: 'email' },
     { id: 'u.role', header: 'Role', cell: ({ row }) => <span className="capitalize">{row.original.role.replace('_', ' ')}</span> },
     {
@@ -100,7 +103,6 @@ export function UsersPage() {
       </div>
 
       {isError && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{(error as Error).message}</div>}
-      {actionErr && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm">{actionErr}</div>}
 
       <DataTable
         columns={columns}

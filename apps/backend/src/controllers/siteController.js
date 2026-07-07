@@ -72,7 +72,7 @@ async function createSite(req, res, next) {
       return res.status(400).json({ error: 'Site name is too long', fields: { name: 'Must be at most 255 characters' } });
     }
     if (await siteNameTaken(name)) {
-      return res.status(400).json({ error: 'Site name already exists', fields: { name: 'This site name is already in use' } });
+      return res.status(400).json({ error: 'This site name is already in use.' });
     }
     const slug = slugify(name);
     const { rows } = await query(
@@ -98,7 +98,7 @@ async function updateSite(req, res, next) {
       return res.status(400).json({ error: 'Invalid status', fields: { status: 'Must be at most 50 characters' } });
     }
     if (name && await siteNameTaken(name, req.params.id)) {
-      return res.status(400).json({ error: 'Site name already exists', fields: { name: 'This site name is already in use' } });
+      return res.status(400).json({ error: 'This site name is already in use.' });
     }
     // Snapshot the row before updating so the audit log can record old values.
     const before = await query('SELECT * FROM sites WHERE id = $1', [req.params.id]);
