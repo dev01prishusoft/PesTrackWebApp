@@ -38,11 +38,14 @@ app.use('/api/references', referenceRoutes);
 app.use('/api', findingRoutes); // /api/findings/*, /api/zones/*
 app.use('/api/audit', auditRoutes);
 
-// Static frontend: admin panel + dashboard served from the same service.
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Static frontend: serve static assets (JS, CSS, images) but disable directory
+// index auto-serving so Express never silently serves public/admin/index.html
+// for /admin/* routes — React Router in the main SPA handles all routing.
+app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 
-// SPA fallback: any non-API GET serves the React app so client-side routes
-// (e.g. deep links / page reloads) resolve to index.html.
+// SPA fallback: ALL non-API GET requests are handled by the main React SPA so
+// client-side routes (including /admin/login, /admin/users, etc.) resolve
+// correctly and the redirect-when-logged-in logic runs.
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });

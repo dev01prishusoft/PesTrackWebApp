@@ -8,7 +8,7 @@ const inputCls =
   'w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40';
 
 export function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, loading, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [username, setUsername] = useState('');
@@ -20,7 +20,10 @@ export function LoginPage() {
   
   const isAdminLogin = location.pathname.startsWith('/admin');
 
+  // Wait until auth resolves before redirecting — avoids race where user is
+  // briefly null while the saved token is being validated.
   useEffect(() => {
+    if (loading) return;
     if (user) {
       if (isAdminLogin) {
         if (user.role === 'admin') navigate('/admin/users', { replace: true });
@@ -29,7 +32,7 @@ export function LoginPage() {
         navigate('/frontend/dashboard', { replace: true });
       }
     }
-  }, [user, navigate, isAdminLogin]);
+  }, [user, loading, navigate, isAdminLogin]);
 
   // Client-side check mirroring the backend rules — instant feedback, no round trip.
   function clientValidate(): FieldErrors {
