@@ -7,7 +7,11 @@ const { query } = require('../config/database');
  */
 async function authenticate(req, res, next) {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  let token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  // GET /findings/photo may be opened without a header (e.g. devtools); allow query token.
+  if (!token && typeof req.query.access_token === 'string') {
+    token = req.query.access_token.trim() || null;
+  }
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }

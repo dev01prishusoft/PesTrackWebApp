@@ -81,12 +81,21 @@ function toStorageKey(value) {
   if (typeof value !== 'string') return value;
   if (value.startsWith('data:')) return value; // inline data, not on S3
   // Presigned/plain S3 URL for our bucket -> strip to the key (path minus query).
-  const s3Host = `${process.env.AWS_BUCKET_NAME}.s3.`;
+  const bucket = process.env.AWS_BUCKET_NAME;
+  const s3Host = `${bucket}.s3.`;
   if (/^https?:\/\//.test(value)) {
     try {
       const u = new URL(value);
+      // Virtual-hosted: https://bucket.s3.region.amazonaws.com/photos/...
       if (u.hostname.startsWith(s3Host)) {
         return decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+      }
+      // Path-style: https://s3.region.amazonaws.com/bucket/photos/...
+      if (u.hostname.startsWith('s3.') || u.hostname === 's3.amazonaws.com') {
+        const parts = u.pathname.replace(/^\/+/, '').split('/');
+        if (parts[0] === bucket && parts.length > 1) {
+          return decodeURIComponent(parts.slice(1).join('/'));
+        }
       }
       return value; // some other external URL — keep it
     } catch {
@@ -156,4 +165,24 @@ async function presignKeys(values) {
   );
 }
 
-module.exports = { uploadPhoto, deletePhotos, presignGet, presignKeys, toStorageKey, isConfigured };
+/** Stream a stored photo from S3 (server-side — no browser CORS needed). */
+async function getPhotoObject(key) {
+  const response = await getClient().send(
+    new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key })
+  );
+  const body = await response.Body.transformToByteArray();
+  return {
+    body: Buffer.from(body),
+    contentType: response.ContentType || 'image/jpeg',
+  };
+}
+
+module.exports = {
+  uploadPhoto,
+  deletePhotos,
+  presignGet,
+  presignKeys,
+  toStorageKey,
+  getPhotoObject,
+  isConfigured,
+};

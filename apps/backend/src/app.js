@@ -15,7 +15,13 @@ const referenceRoutes = require('./routes/referenceRoutes');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const app = express();
-app.set('trust proxy', true);
+// Trust only the first reverse-proxy hop in production (e.g. Render). Using `true`
+// trusts every proxy and lets clients spoof X-Forwarded-For, which breaks rate limiting.
+if (process.env.TRUST_PROXY) {
+  app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+} else if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 // Security + parsing. CSP disabled so the existing CDN-based HTML dashboard works.
 app.use(helmet({ contentSecurityPolicy: false }));

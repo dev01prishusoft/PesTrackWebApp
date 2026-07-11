@@ -1,6 +1,13 @@
 const { query, withTransaction } = require('../config/database');
 const { logAction, resolveAuditValues } = require('../services/auditService');
-const { uploadPhoto, deletePhotos, presignKeys, toStorageKey } = require('../services/storageService');
+const {
+  uploadPhoto,
+  deletePhotos,
+  presignKeys,
+  toStorageKey,
+  getPhotoObject,
+  isConfigured,
+} = require('../services/storageService');
 const {
   validate,
   required,
@@ -182,8 +189,13 @@ async function listFindings(req, res, next) {
 // shape as listFindings. The editor calls this when opening the edit dialog so
 // it works off the latest data; a 404 with code 'DELETED' means another user
 // removed the record, and the client shows the "already deleted" message.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function getFinding(req, res, next) {
   try {
+    if (!UUID_RE.test(req.params.locationId)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     const siteId = req.query.siteId;
     const { rows: locRows } = await query(
       'SELECT * FROM locations WHERE id = $1 AND site_id = $2',
@@ -656,6 +668,52 @@ async function uploadPhotos(req, res, next) {
   }
 }
 
+/** Same-origin photo proxy for PDF export and map popups (avoids S3 CORS). */
+async function getPhoto(req, res, next) {
+  try {
+    const siteId = req.query.siteId;
+    const rawKey = req.query.key;
+    if (!rawKey || typeof rawKey !== 'string') {
+      return res.status(400).json({ error: 'key is required' });
+    }
+    const key = toStorageKey(rawKey);
+    if (!key || key.startsWith('data:') || /^https?:/.test(key) || !key.startsWith('photos/')) {
+      return res.status(400).json({ error: 'Invalid photo key' });
+    }
+    if (!isConfigured()) {
+      return res.status(503).json({ error: 'Photo storage is not configured' });
+    }
+
+    const { rows } = await query(
+      `SELECT l.site_id
+         FROM photos p
+         JOIN visits v ON v.id = p.visit_id
+         JOIN locations l ON l.id = v.location_id
+        WHERE p.photo_url = $1
+        LIMIT 1`,
+      [key]
+    );
+    if (!rows.length || String(rows[0].site_id) !== String(siteId)) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
+
+    const { body, contentType } = await getPhotoObject(key);
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.send(body);
+  } catch (err) {
+    // S3 object missing or unreadable — return a clear status instead of a generic 500.
+    const code = err.name || err.Code;
+    if (code === 'NoSuchKey' || code === 'NotFound') {
+      return res.status(404).json({ error: 'Photo not found in storage' });
+    }
+    if (code === 'AccessDenied') {
+      return res.status(503).json({ error: 'Photo storage access denied — check S3 IAM permissions (s3:GetObject)' });
+    }
+    next(err);
+  }
+}
+
 module.exports = {
   listFindings,
   getFinding,
@@ -669,4 +727,5 @@ module.exports = {
   createZone,
   deleteZone,
   uploadPhotos,
+  getPhoto,
 };

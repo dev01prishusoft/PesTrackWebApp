@@ -7,6 +7,10 @@ const { requireRole, requireSiteAccess } = require('../middleware/roleCheck');
 const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
 
+// Only match real location UUIDs — avoids /findings/photo being treated as :locationId.
+const LOC_ID =
+  ':locationId([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
+
 // siteId arrives in the query string (GET/DELETE) or the body (POST/PUT).
 const siteFromReq = (req) => req.query.siteId || req.body.siteId;
 const siteAccess = requireSiteAccess(siteFromReq);
@@ -24,16 +28,17 @@ router.use('/zones', authenticate, requireSiteId);
 
 // --- photo upload (multipart) ---
 router.post('/findings/photos', canWrite, siteAccess, upload.array('files'), ctrl.uploadPhotos);
+router.get('/findings/photo', siteAccess, ctrl.getPhoto);
 
 // --- findings (locations + visits) ---
 router.get('/findings', siteAccess, ctrl.listFindings);
-router.get('/findings/:locationId', siteAccess, ctrl.getFinding);
+router.get(`/findings/${LOC_ID}`, siteAccess, ctrl.getFinding);
 router.delete('/findings', requireAdmin, siteAccess, ctrl.clearFindings);
 router.post('/findings', canWrite, siteAccess, ctrl.createFinding);
-router.post('/findings/:locationId/visits', canWrite, siteAccess, ctrl.addVisit);
-router.put('/findings/:locationId/visits/:visitId', canWrite, siteAccess, ctrl.editVisit);
-router.delete('/findings/:locationId/visits/:visitId', canWrite, siteAccess, ctrl.deleteVisit);
-router.delete('/findings/:locationId', canWrite, siteAccess, ctrl.deleteFinding);
+router.post(`/findings/${LOC_ID}/visits`, canWrite, siteAccess, ctrl.addVisit);
+router.put(`/findings/${LOC_ID}/visits/:visitId`, canWrite, siteAccess, ctrl.editVisit);
+router.delete(`/findings/${LOC_ID}/visits/:visitId`, canWrite, siteAccess, ctrl.deleteVisit);
+router.delete(`/findings/${LOC_ID}`, canWrite, siteAccess, ctrl.deleteFinding);
 
 // --- construction zones ---
 router.get('/zones', siteAccess, ctrl.listZones);
