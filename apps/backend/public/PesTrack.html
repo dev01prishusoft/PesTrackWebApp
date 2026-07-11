@@ -1507,7 +1507,10 @@ function saveFinding(){
   function resolvePendingPhotos(){
     const jobs = pendingPhotos.map(p => {
       if (typeof p !== 'string' || !p.startsWith('data:')) return Promise.resolve(p);
-      return uploadPhotoToServer(dataURLtoBlob(p)).then(res => res.key);
+      return uploadPhotoToServer(dataURLtoBlob(p)).then(res => {
+        primePhotoCache(res.key, p);
+        return res.key;
+      });
     });
     return Promise.all(jobs);
   }
@@ -1770,7 +1773,58 @@ window.clearAllFindings = clearAllFindings;
 window._blobUrls = [];  // tracked for revocation on next render
 window._photoUrls = {}; // visitId_index → blob URL (or original b64 as fallback)
 window._photoSrcByKey = {}; // visitId_index → original stored value (for retry / lazy load)
+window._photoBlobCache = window._photoBlobCache || new Map();   // s3 key → Blob (persistent)
+window._photoDataUriCache = window._photoDataUriCache || new Map(); // s3 key → data URI (for fast PDF)
+const _photoFetchInflight = new Map(); // s3 key → Promise<Blob>
 let _renderFindingsGen = 0;
+
+function clearPhotoCaches(){
+  window._photoBlobCache = new Map();
+  window._photoDataUriCache = new Map();
+  _photoFetchInflight.clear();
+}
+
+function primePhotoCache(s3Key, dataUri){
+  if(!s3Key || !dataUri) return;
+  window._photoDataUriCache.set(s3Key, dataUri);
+  if(!window._photoBlobCache.has(s3Key)){
+    try{ window._photoBlobCache.set(s3Key, dataURLtoBlob(dataUri)); }catch(e){}
+  }
+}
+
+function blobToDataUri(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Background-warm data-URI cache so PDF export skips S3 round-trips.
+function prefetchPhotosForPdf(){
+  const seen = new Set();
+  const srcs = [];
+  (findings || []).forEach(loc => {
+    (loc.visits || []).forEach(v => {
+      (v.photos || []).forEach(p => {
+        if(!p || seen.has(p)) return;
+        seen.add(p);
+        if(/^data:/i.test(p)) return;
+        const key = s3KeyFromPhoto(p);
+        if(key && window._photoDataUriCache.has(key)) return;
+        srcs.push(p);
+      });
+    });
+  });
+  if(!srcs.length) return;
+  (async () => {
+    const BATCH = 8;
+    for(let i = 0; i < srcs.length; i += BATCH){
+      await Promise.all(srcs.slice(i, i + BATCH).map(s => photoToDataUri(s).catch(() => null)));
+    }
+  })();
+}
 
 function base64ToBlobUrl(b64){
   try{
@@ -1802,59 +1856,71 @@ function s3KeyFromPhoto(value){
 async function fetchPhotoBlob(src){
   const key = s3KeyFromPhoto(src);
   if(!key) throw new Error('Not an S3 photo');
-  if(!window._photoBlobCache) window._photoBlobCache = new Map();
   if(window._photoBlobCache.has(key)) return window._photoBlobCache.get(key);
-  const token = localStorage.getItem('pt_admin_token');
-  if(!token) throw new Error('Not logged in');
-  const qs = 'siteId=' + encodeURIComponent(currentSiteId) +
-    '&key=' + encodeURIComponent(key) +
-    '&access_token=' + encodeURIComponent(token);
-  const res = await fetch('/api/findings/photo?' + qs, {
-    headers: { 'Authorization': 'Bearer ' + token }
-  });
-  if(res.status === 401) throw new Error('Unauthorized');
-  if(!res.ok) throw new Error('Photo fetch failed');
-  const blob = await res.blob();
-  window._photoBlobCache.set(key, blob);
-  return blob;
+  if(_photoFetchInflight.has(key)) return _photoFetchInflight.get(key);
+  const fetchP = (async () => {
+    const token = localStorage.getItem('pt_admin_token');
+    if(!token) throw new Error('Not logged in');
+    const qs = 'siteId=' + encodeURIComponent(currentSiteId) +
+      '&key=' + encodeURIComponent(key) +
+      '&access_token=' + encodeURIComponent(token);
+    const res = await fetch('/api/findings/photo?' + qs, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if(res.status === 401) throw new Error('Unauthorized');
+    if(!res.ok) throw new Error('Photo fetch failed');
+    const blob = await res.blob();
+    window._photoBlobCache.set(key, blob);
+    return blob;
+  })();
+  _photoFetchInflight.set(key, fetchP);
+  try{
+    return await fetchP;
+  }finally{
+    _photoFetchInflight.delete(key);
+  }
 }
 
 async function photoToDataUri(src){
   if(!src) return null;
   if(/^data:/i.test(src)) return src;
-  if(s3KeyFromPhoto(src)){
-    try{
-      let blob;
-      try {
-        blob = await fetchPhotoBlob(src);
-      } catch(proxyErr) {
-        // Fallback: fetch presigned S3 URL directly (for PDF export when proxy fails).
-        if(/^https?:\/\//i.test(src)){
-          const r = await fetch(src);
-          if(r.ok) blob = await r.blob();
-        }
-        if(!blob) throw proxyErr;
+  const key = s3KeyFromPhoto(src);
+  if(!key) return null;
+  if(window._photoDataUriCache.has(key)) return window._photoDataUriCache.get(key);
+  try{
+    let blob;
+    try {
+      blob = await fetchPhotoBlob(src);
+    } catch(proxyErr) {
+      // Fallback: fetch presigned S3 URL directly (for PDF export when proxy fails).
+      if(/^https?:\/\//i.test(src)){
+        const r = await fetch(src);
+        if(r.ok) blob = await r.blob();
       }
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    }catch(e){
-      console.warn('photoToDataUri failed:', e);
-      return null;
+      if(!blob) throw proxyErr;
+      window._photoBlobCache.set(key, blob);
     }
+    const dataUri = await blobToDataUri(blob);
+    window._photoDataUriCache.set(key, dataUri);
+    return dataUri;
+  }catch(e){
+    console.warn('photoToDataUri failed:', e);
+    return null;
   }
-  return null;
 }
 
 async function photoToDisplayUrl(src){
   if(!src) return '';
   if(/^data:/i.test(src)) return base64ToBlobUrl(src);
+  const key = s3KeyFromPhoto(src);
+  if(key && window._photoBlobCache.has(key)){
+    const url = URL.createObjectURL(window._photoBlobCache.get(key));
+    window._blobUrls.push(url);
+    return url;
+  }
   // Presigned S3 URLs work directly in <img> — no auth proxy needed.
   if(/^https?:\/\//i.test(src)) return src;
-  if(s3KeyFromPhoto(src)){
+  if(key){
     try{
       const blob = await fetchPhotoBlob(src);
       const url = URL.createObjectURL(blob);
@@ -1926,9 +1992,9 @@ async function renderAllFindings(){
   window._blobUrls = [];
   window._photoUrls = {};
   window._photoSrcByKey = {};
-  window._photoBlobCache = new Map();
 
-  // Fetch S3 photos via same-origin proxy (parallel) — avoids expired presigned URLs in popups
+  // Fetch S3 photos via same-origin proxy (parallel) — avoids expired presigned URLs in popups.
+  // Blob + data-URI caches persist across renders so PDF export stays fast.
   const photoEntries = [];
   findings.forEach(loc => {
     loc.visits.forEach(v => {
@@ -1941,6 +2007,8 @@ async function renderAllFindings(){
   });
   await Promise.all(photoEntries.map(async ({ cacheKey, src }) => {
     window._photoUrls[cacheKey] = await photoToDisplayUrl(src);
+    // Warm PDF cache from the blob we just fetched (no extra network).
+    if(src && !/^data:/i.test(src)) photoToDataUri(src).catch(() => {});
   }));
   if(gen !== _renderFindingsGen) return;
 
@@ -2186,6 +2254,7 @@ function loadFindings(){
     findings = data.findings.map(mapApiFinding);
     window._ptFindings = findings;
     return renderAllFindings().then(() => {
+      prefetchPhotosForPdf();
       showNotif('✅ Findings loaded');
     });
   })
@@ -2584,6 +2653,7 @@ function buildEscalationSelect() {
 
 function changeSite(siteId) {
   currentSiteId = siteId;
+  clearPhotoCaches();
   // No site selected (e.g. a user with no assigned sites): the map is already
   // initialized with a default view — skip site-scoped data loading, which
   // would otherwise fire requests with siteId=null.
@@ -2665,7 +2735,10 @@ window._importFindingsData = function(arr, czArr){
       
       const uploadPhotosPromise = Promise.all((first.photos || []).map(p => {
         if (p.startsWith('data:')) {
-          return uploadPhotoToServer(dataURLtoBlob(p)).then(r => r.key);
+          return uploadPhotoToServer(dataURLtoBlob(p)).then(r => {
+            primePhotoCache(r.key, p);
+            return r.key;
+          });
         }
         return Promise.resolve(p);
       }));
@@ -2704,7 +2777,10 @@ window._importFindingsData = function(arr, czArr){
             return chain.then(() => {
               const uploadRestPhotos = Promise.all((v.photos || []).map(p => {
                 if (p.startsWith('data:')) {
-                  return uploadPhotoToServer(dataURLtoBlob(p)).then(r => r.key);
+                  return uploadPhotoToServer(dataURLtoBlob(p)).then(r => {
+            primePhotoCache(r.key, p);
+            return r.key;
+          });
                 }
                 return Promise.resolve(p);
               }));
