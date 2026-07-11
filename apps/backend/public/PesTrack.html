@@ -225,13 +225,11 @@ async function exportFindings(){
   if(btn){ btn.disabled=true; btn.textContent='⏳ Compressing…'; }
 
   // Re-compress photos to export-safe size (400px, 40% JPEG)
-  function compressForExport(dataUrl){
+  async function compressForExport(dataUrl){
+    const src = await photoToDataUri(dataUrl);
+    if(!src) return dataUrl;
     return new Promise(resolve=>{
       const img=new Image();
-      // Request cross-origin (S3) images in CORS mode so the canvas isn't
-      // tainted and toDataURL() can read it. Requires the S3 bucket to send
-      // CORS headers (see apps/backend/s3-cors.json). Harmless for data: URIs.
-      img.crossOrigin='anonymous';
       img.onload=()=>{
         try{
           const MAX=400;
@@ -241,14 +239,12 @@ async function exportFindings(){
           c.getContext('2d').drawImage(img,0,0,w,h);
           resolve(c.toDataURL('image/jpeg',0.40));
         }catch(e){
-          // Tainted canvas (S3 CORS not configured) — keep the original URL
-          // so export still succeeds instead of throwing.
-          console.warn('Photo export skipped (canvas tainted):', e.message);
-          resolve(dataUrl);
+          console.warn('Photo export skipped:', e.message);
+          resolve(src);
         }
       };
-      img.onerror=()=>resolve(dataUrl);
-      img.src=dataUrl;
+      img.onerror=()=>resolve(src);
+      img.src=src;
     });
   }
 
@@ -582,6 +578,22 @@ const LS_CZ_KEY = 'pt_constr_gouna_v1';
 // Parcels come exclusively from the API (GET /api/parcels). No built-in list —
 // upload parcels via "📂 Update Parcels" if a site has none.
 
+// Normalize quadrant labels from the API/XLSX ("Gouna NW", "nw", etc.) → NW|NE|SW|SE.
+function normalizeQuad(q){
+  if(q == null || q === '') return '';
+  const s = String(q).trim().toUpperCase();
+  for(const code of ['NW','NE','SW','SE']){
+    if(s === code || s.endsWith(' ' + code) || s.endsWith(code)) return code;
+  }
+  const m = s.match(/\b(NW|NE|SW|SE)\b/);
+  return m ? m[1] : s.slice(0, 2);
+}
+window.normalizeQuad = normalizeQuad;
+
+function parcelHasCoords(p){
+  return p && p.lat != null && p.lng != null && !isNaN(p.lat) && !isNaN(p.lng);
+}
+
 // ── Parcel loader ──────────────────────────────────────────────────
 function loadParcels() {
   if (!currentSiteId) return Promise.resolve();
@@ -599,10 +611,11 @@ function loadParcels() {
     // Use only API/DB parcels — no built-in fallback, so every dropdown entry
     // maps to a real parcel_id.
     window._PARCELS = data.parcels.map(p => ({
+      id: p.id,
       name: p.parcel_name,
-      quad: p.quadrant,
-      lat: p.lat ? Number(p.lat) : null,
-      lng: p.lng ? Number(p.lng) : null
+      quad: normalizeQuad(p.quadrant),
+      lat: p.lat != null ? Number(p.lat) : null,
+      lng: p.lng != null ? Number(p.lng) : null
     }));
     if (window._PARCELS.length === 0) {
       showNotif('⚠️ No parcels found for this site — upload parcels via "📂 Update Parcels".', true, 6000);
@@ -668,11 +681,12 @@ window._QUADS = {NW:'Gouna NW', NE:'Gouna NE', SW:'Gouna SW', SE:'Gouna SE'};
 window._QUAD_ORDER = ['NW','NE','SW','SE'];
 window._nearestParcel = function(lat, lng){
   const P = window._PARCELS || [];
-  if(!P || P.length === 0) return null;
-  // Only consider named parcels, not general areas
-  const namedParcels = P.filter(p => !p.name.includes('General Area'));
-  if(namedParcels.length === 0) return null;
-  
+  if(!P || P.length === 0 || lat == null || lng == null) return null;
+
+  const withCoords = P.filter(p => parcelHasCoords(p));
+  const namedParcels = withCoords.filter(p => !p.name.includes('General Area'));
+  const generalAreas = withCoords.filter(p => p.name.includes('General Area'));
+
   let best = null;
   let bestDist = Infinity;
   for(let i = 0; i < namedParcels.length; i++){
@@ -685,8 +699,69 @@ window._nearestParcel = function(lat, lng){
       best = p;
     }
   }
+  if(best) return best;
+
+  // Fallback: nearest general-area parcel (same as built-in ElGouna list behaviour).
+  for(let i = 0; i < generalAreas.length; i++){
+    const p = generalAreas[i];
+    const dlat = p.lat - lat;
+    const dlng = p.lng - lng;
+    const dist = Math.sqrt(dlat * dlat + dlng * dlng);
+    if(dist < bestDist){
+      bestDist = dist;
+      best = p;
+    }
+  }
   return best || null;
 };
+
+function setParcelDropdown(parcelName){
+  const sel = document.getElementById('fi-parcel');
+  if(!sel || !parcelName) return;
+  const p = (window._PARCELS || []).find(x => x.name === parcelName);
+  if(p && ![...sel.options].some(o => o.value === parcelName)){
+    const q = normalizeQuad(p.quad);
+    const quads = window._QUAD_ORDER || ['NW','NE','SW','SE'];
+    let og = null;
+    if(quads.includes(q)){
+      const label = (window._QUADS && window._QUADS[q]) || q;
+      og = [...sel.querySelectorAll('optgroup')].find(g => g.label === label);
+      if(!og){
+        og = document.createElement('optgroup');
+        og.label = label;
+        sel.appendChild(og);
+      }
+    } else {
+      og = [...sel.querySelectorAll('optgroup')].find(g => g.label === 'Other');
+      if(!og){
+        og = document.createElement('optgroup');
+        og.label = 'Other';
+        sel.appendChild(og);
+      }
+    }
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name;
+    og.appendChild(opt);
+  }
+  sel.value = parcelName;
+}
+window.setParcelDropdown = setParcelDropdown;
+
+function resolveParcelId(parcelName, lat, lng){
+  const _norm = s => (s || '').trim().toLowerCase();
+  let chosen = parcelName;
+  if(!chosen && lat != null && lng != null){
+    const nearest = window._nearestParcel(lat, lng);
+    chosen = nearest ? nearest.name : null;
+  }
+  if(!chosen) return null;
+  const fromList = (window._PARCELS || []).find(p => _norm(p.name) === _norm(chosen));
+  if(fromList && fromList.id) return fromList.id;
+  const fromDb = parcels.find(p => _norm(p.parcel_name) === _norm(chosen));
+  return fromDb ? fromDb.id : null;
+}
+window.resolveParcelId = resolveParcelId;
 window._quadOfLoc = function(loc){
   if(loc && loc.parcel){
     const p = (window._PARCELS||[]).find(p=>p.name===loc.parcel);
@@ -838,20 +913,35 @@ function buildParcelSelect(){
   blank.value = ''; blank.textContent = '— Auto-detect —';
   parcelSel.appendChild(blank);
   const quads = window._QUAD_ORDER || ['NW','NE','SW','SE'];
+  const listed = new Set();
   quads.forEach(q => {
     const og = document.createElement('optgroup');
     og.label = (window._QUADS && window._QUADS[q]) || q;
-    const parcelsInQuad = (window._PARCELS || []).filter(p => p.quad === q && !p.name.includes('General Area'));
+    const parcelsInQuad = (window._PARCELS || []).filter(p => normalizeQuad(p.quad) === q && !p.name.includes('General Area'));
     parcelsInQuad.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.name;
       opt.textContent = p.name;
       og.appendChild(opt);
+      listed.add(p.name);
     });
     if(parcelsInQuad.length) parcelSel.appendChild(og);
   });
+  // Parcels whose quadrant didn't match NW/NE/SW/SE still need to be selectable.
+  const unmatched = (window._PARCELS || []).filter(p => !p.name.includes('General Area') && !listed.has(p.name));
+  if(unmatched.length){
+    const og = document.createElement('optgroup');
+    og.label = 'Other';
+    unmatched.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name;
+      og.appendChild(opt);
+    });
+    parcelSel.appendChild(og);
+  }
   // Restore previous selection if still valid
-  if(currentVal) parcelSel.value = currentVal;
+  if(currentVal) setParcelDropdown(currentVal);
 }
 window.buildParcelSelect = buildParcelSelect;
 
@@ -1119,11 +1209,13 @@ function onFindingsMapClick(e){
     e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
   document.getElementById('fi-escalated').value = '';
   document.getElementById('fi-date').value = new Date().toISOString().slice(0,10);
-  // Auto-set parcel to nearest
+  // Auto-set parcel to nearest (must use setParcelDropdown so the option exists in the select)
   const nearestParcel = window._nearestParcel ? window._nearestParcel(e.latlng.lat, e.latlng.lng) : null;
   if(nearestParcel) {
-    document.getElementById('fi-parcel').value = nearestParcel.name;
+    setParcelDropdown(nearestParcel.name);
     console.log('📍 Auto-selected parcel:', nearestParcel.name, 'at', nearestParcel.quad);
+  } else {
+    document.getElementById('fi-parcel').value = '';
   }
   setFiStat('open', document.getElementById('sb-open'));
   // Default to the first API-provided category (falls back to stp_trench)
@@ -1155,9 +1247,15 @@ function addVisitToLocation(locId){
   document.getElementById('fi-notes').value = '';
   document.getElementById('fi-escalated').value = '';
   document.getElementById('fi-date').value = new Date().toISOString().slice(0,10);
-  // Set parcel dropdown
+  // Set parcel dropdown — inherit from finding or auto-detect from its GPS
   if(loc && loc.parcel) {
-    document.getElementById('fi-parcel').value = loc.parcel;
+    setParcelDropdown(loc.parcel);
+  } else if(loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+    const np = window._nearestParcel(loc.lat, loc.lng);
+    if(np) setParcelDropdown(np.name);
+    else document.getElementById('fi-parcel').value = '';
+  } else {
+    document.getElementById('fi-parcel').value = '';
   }
   // Any prior visit = repeat offense (not just if previously resolved)
   const hasHistory = loc && loc.visits.length > 0;
@@ -1242,7 +1340,13 @@ function openEditVisitDialog(loc, visit){
   document.getElementById('fi-date').value   = visit.date   || new Date().toISOString().slice(0,10);
   // Set parcel dropdown
   if(loc && loc.parcel) {
-    document.getElementById('fi-parcel').value = loc.parcel;
+    setParcelDropdown(loc.parcel);
+  } else if(loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+    const np = window._nearestParcel(loc.lat, loc.lng);
+    if(np) setParcelDropdown(np.name);
+    else document.getElementById('fi-parcel').value = '';
+  } else {
+    document.getElementById('fi-parcel').value = '';
   }
   setFiStat(visit.status||'open', document.getElementById('sb-'+(visit.status||'open')));
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('sel', b.dataset.id===(visit.cat||'stp_trench')));
@@ -1369,7 +1473,7 @@ function saveFinding(){
   const notes = document.getElementById('fi-notes').value.trim();
   const date  = document.getElementById('fi-date').value;
   const coordsRaw = document.getElementById('fi-coords').value.trim();
-  const parcel = document.getElementById('fi-parcel').value || null;
+  const parcel = (document.getElementById('fi-parcel').value || '').trim() || null;
 
   const escalated = (document.getElementById('fi-escalated').value || '').trim() || null;
 
@@ -1380,8 +1484,8 @@ function saveFinding(){
 
   const token = localStorage.getItem('pt_admin_token');
 
-  const okBtn = document.querySelector('.mbtns .bok');
-  const cancelBtn = document.querySelector('.mbtns .bcancel');
+  const okBtn = document.querySelector('#m-fi .mbtns .bok');
+  const cancelBtn = document.querySelector('#m-fi .mbtns .bcancel');
   const originalOkText = okBtn ? okBtn.innerHTML : 'Save Finding';
   if (okBtn) {
     okBtn.disabled = true;
@@ -1423,18 +1527,15 @@ function saveFinding(){
     photos: photoUrls
   };
 
-  // Resolve the selected parcel NAME (dropdown) back to its DB id so edits to an
-  // existing finding persist the parcel change. Trimmed + case-insensitive match.
-  const _normP = s => (s || '').trim().toLowerCase();
-  const _pObjEdit = parcel
-    ? parcels.find(p => _normP(p.parcel_name) === _normP(parcel))
-    : null;
-  const editParcelId = _pObjEdit ? _pObjEdit.id : null;
-
   // Parse the coordinates field so edits to an existing finding persist a moved
   // GPS location. Only send lat/lng when they parse to valid numbers; otherwise
   // omit them so the location is left unchanged (and bad input can't blank it).
   const _editLL = coordsRaw ? parseCoords(coordsRaw) : null;
+  const editParcelId = resolveParcelId(
+    parcel,
+    _editLL ? _editLL.lat : (pendingFindingLL ? pendingFindingLL.lat : null),
+    _editLL ? _editLL.lng : (pendingFindingLL ? pendingFindingLL.lng : null)
+  );
   const editCoords = _editLL ? { lat: Number(_editLL.lat), lng: Number(_editLL.lng) } : {};
 
   let savePromise;
@@ -1498,19 +1599,12 @@ function saveFinding(){
     
     const nearestP = window._nearestParcel ? window._nearestParcel(ll.lat, ll.lng) : null;
     const assignedParcel = parcel || (nearestP ? nearestP.name : null);
-
-    // Resolve the parcel NAME back to its DB id. Match is trimmed + case-insensitive
-    // so minor whitespace/casing differences still resolve. If a parcel was chosen
-    // but can't be found in the DB list (e.g. a built-in fallback parcel that isn't
-    // in the database), warn instead of silently saving parcel_id = null.
-    const _norm = s => (s || '').trim().toLowerCase();
-    const pObj = assignedParcel
-      ? parcels.find(p => _norm(p.parcel_name) === _norm(assignedParcel))
-      : null;
-    const parcelId = pObj ? pObj.id : null;
-    if (assignedParcel && !parcelId) {
+    const parcelId = resolveParcelId(parcel, ll.lat, ll.lng);
+    if(assignedParcel && !parcelId){
       console.warn('Parcel "' + assignedParcel + '" not found in DB parcels — saving without parcel_id.');
       showNotif('⚠️ Parcel "' + assignedParcel + '" is not in the database — finding saved without a parcel link.', true, 6000);
+    } else if(!parcel && nearestP){
+      setParcelDropdown(nearestP.name);
     }
     
     const maxRef = findings.reduce((mx,f)=>{ const n=parseInt(f.refNum,10)||0; return n>mx?n:mx; }, 0);
@@ -1541,6 +1635,13 @@ function saveFinding(){
 
   return savePromise
   .then(() => {
+    if (okBtn) {
+      okBtn.disabled = false;
+      okBtn.innerHTML = originalOkText;
+    }
+    if (cancelBtn) {
+      cancelBtn.disabled = false;
+    }
     document.getElementById('m-fi').style.display = 'none';
     findingsTool = false;
     if(document.getElementById('btn-fi')) document.getElementById('btn-fi').classList.remove('on');
@@ -1668,6 +1769,8 @@ window.clearAllFindings = clearAllFindings;
 // no event-timing dependency).
 window._blobUrls = [];  // tracked for revocation on next render
 window._photoUrls = {}; // visitId_index → blob URL (or original b64 as fallback)
+window._photoSrcByKey = {}; // visitId_index → original stored value (for retry / lazy load)
+let _renderFindingsGen = 0;
 
 function base64ToBlobUrl(b64){
   try{
@@ -1680,12 +1783,116 @@ function base64ToBlobUrl(b64){
     window._blobUrls.push(url);
     return url;
   }catch(e){
-    return b64; // fallback: use original base64
+    return b64; // fallback: use original URL or base64
   }
 }
 
+// S3 photos are presigned https URLs in the API; extract the stored key for our proxy.
+function s3KeyFromPhoto(value){
+  if(typeof value !== 'string' || /^data:/i.test(value)) return null;
+  if(!/^https?:\/\//i.test(value)) return value.startsWith('photos/') ? value : null;
+  try{
+    const path = decodeURIComponent(new URL(value).pathname.replace(/^\/+/, ''));
+    if(path.startsWith('photos/')) return path;
+    const idx = path.indexOf('photos/');
+    return idx >= 0 ? path.slice(idx) : null;
+  }catch(e){ return null; }
+}
+
+async function fetchPhotoBlob(src){
+  const key = s3KeyFromPhoto(src);
+  if(!key) throw new Error('Not an S3 photo');
+  if(!window._photoBlobCache) window._photoBlobCache = new Map();
+  if(window._photoBlobCache.has(key)) return window._photoBlobCache.get(key);
+  const token = localStorage.getItem('pt_admin_token');
+  const res = await fetch(
+    '/api/findings/photo?siteId=' + encodeURIComponent(currentSiteId) +
+    '&key=' + encodeURIComponent(key),
+    { headers: { 'Authorization': 'Bearer ' + token } }
+  );
+  if(res.status === 401){ handleUnauthorized(); throw new Error('Unauthorized'); }
+  if(!res.ok) throw new Error('Photo fetch failed');
+  const blob = await res.blob();
+  window._photoBlobCache.set(key, blob);
+  return blob;
+}
+
+async function photoToDataUri(src){
+  if(!src) return null;
+  if(/^data:/i.test(src)) return src;
+  if(s3KeyFromPhoto(src)){
+    try{
+      const blob = await fetchPhotoBlob(src);
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }catch(e){
+      console.warn('photoToDataUri failed:', e);
+      return null;
+    }
+  }
+  return null;
+}
+
+async function photoToDisplayUrl(src){
+  if(!src) return '';
+  if(/^data:/i.test(src)) return base64ToBlobUrl(src);
+  if(s3KeyFromPhoto(src)){
+    try{
+      const blob = await fetchPhotoBlob(src);
+      const url = URL.createObjectURL(blob);
+      window._blobUrls.push(url);
+      return url;
+    }catch(e){
+      console.warn('photoToDisplayUrl failed:', e);
+      return src;
+    }
+  }
+  return src;
+}
+
+// Expose for the PDF <script> block (IIFE scope does not cross script tags).
+window.s3KeyFromPhoto = s3KeyFromPhoto;
+window.fetchPhotoBlob = fetchPhotoBlob;
+window.photoToDataUri = photoToDataUri;
+window.photoToDisplayUrl = photoToDisplayUrl;
+
+async function ensurePopupPhoto(img){
+  const key = img.dataset.photoKey;
+  if(!key) return;
+  const src = window._photoSrcByKey[key];
+  if(!src) return;
+  let url = window._photoUrls[key];
+  if(!url){
+    url = await photoToDisplayUrl(src);
+    if(url) window._photoUrls[key] = url;
+  }
+  if(url && img.getAttribute('src') !== url){
+    img.setAttribute('src', url);
+  }
+}
+
+function refreshPopupPhotos(marker){
+  const el = marker.getPopup() && marker.getPopup().getElement();
+  if(!el) return;
+  el.querySelectorAll('.fi-popup-photo[data-photo-key]').forEach(img => {
+    ensurePopupPhoto(img).catch(e => console.warn('refreshPopupPhotos:', e));
+  });
+}
+
+window.retryPopupPhoto = function(img){
+  if(!img || !img.dataset || img.dataset.retrying === '1') return;
+  img.dataset.retrying = '1';
+  ensurePopupPhoto(img)
+    .catch(e => console.warn('retryPopupPhoto:', e))
+    .finally(() => { delete img.dataset.retrying; });
+};
+
 // ── Render all finding markers ─────────────────────────────────────
-function renderAllFindings(){
+async function renderAllFindings(){
   if(!findingsLayer) return;
   findingsLayer.clearLayers();
   if(window._hideFindings){               // toggle: hide all findings, show only construction
@@ -1698,19 +1905,30 @@ function renderAllFindings(){
     return;
   }
 
+  const gen = ++_renderFindingsGen;
+
   // Revoke old blob URLs to prevent memory leaks
   (window._blobUrls||[]).forEach(u=>{ try{URL.revokeObjectURL(u);}catch(e){} });
   window._blobUrls = [];
   window._photoUrls = {};
+  window._photoSrcByKey = {};
+  window._photoBlobCache = new Map();
 
-  // Convert ALL photos to blob URLs upfront
+  // Fetch S3 photos via same-origin proxy (parallel) — avoids expired presigned URLs in popups
+  const photoEntries = [];
   findings.forEach(loc => {
     loc.visits.forEach(v => {
       (v.photos||[]).forEach((p, pi) => {
-        window._photoUrls[(v.id||'v')+'_'+pi] = base64ToBlobUrl(p);
+        const cacheKey = (v.id||'v')+'_'+pi;
+        photoEntries.push({ cacheKey, src: p });
+        window._photoSrcByKey[cacheKey] = p;
       });
     });
   });
+  await Promise.all(photoEntries.map(async ({ cacheKey, src }) => {
+    window._photoUrls[cacheKey] = await photoToDisplayUrl(src);
+  }));
+  if(gen !== _renderFindingsGen) return;
 
   let counts = {open:0, repeat:0, resolved:0};
 
@@ -1742,6 +1960,7 @@ function renderAllFindings(){
     // Lazy function: popup rebuilt on each open using current _photoUrls
     const _loc = loc;
     marker.bindPopup(function(){ return buildPopup(_loc); }, {maxWidth:320, minWidth:240});
+    marker.on('popupopen', () => refreshPopupPhotos(marker));
     findingsLayer.addLayer(marker);
   });
 
@@ -1767,6 +1986,7 @@ function buildPopup(loc){
   const latest = loc.visits[0];
   const stat = STAT_CFG[latest.status] || STAT_CFG.open;
   const cat  = CATS.find(c=>c.id===latest.cat) || CATS[CATS.length-1];
+  const _photoPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
   const canAddVisit = canModifyItem();
 
@@ -1775,8 +1995,9 @@ function buildPopup(loc){
     const vs = STAT_CFG[v.status]||STAT_CFG.open;
     const vc = CATS.find(c=>c.id===v.cat)||CATS[CATS.length-1];
     const photosHTML = photos.map((p, pi) => {
-      const blobUrl = window._photoUrls[(v.id||'v')+'_'+pi] || p;
-      return `<img src="${blobUrl}" class="fi-popup-photo" title="Click to enlarge" style="width:60px;height:45px;object-fit:cover;border-radius:3px;cursor:pointer;border:1px solid #ddd">`;
+      const cacheKey = (v.id||'v')+'_'+pi;
+      const blobUrl = window._photoUrls[cacheKey] || _photoPlaceholder;
+      return `<img src="${blobUrl}" data-photo-key="${cacheKey}" class="fi-popup-photo" loading="eager" decoding="async" title="Click to enlarge" onerror="retryPopupPhoto(this)" style="width:60px;height:45px;object-fit:cover;border-radius:3px;cursor:pointer;border:1px solid #ddd;background:#eee">`;
     }).join('');
 
     // Edit/delete only appear on visits the current user is allowed to modify.
@@ -1815,11 +2036,20 @@ function openLightbox(src){
 }
 window.openLightbox = openLightbox;
 
-// Photo click handler — reads src directly from img element
+// Photo click handler — ensure thumbnail is loaded before opening lightbox
 document.addEventListener('click', function(e){
   const img = e.target.closest ? e.target.closest('.fi-popup-photo') : null;
-  if(!img || !img.src) return;
-  openLightbox(img.src);
+  if(!img) return;
+  const open = () => {
+    const src = img.currentSrc || img.src;
+    if(!src || src.startsWith('data:image/gif')) return;
+    openLightbox(src);
+  };
+  if(img.complete && img.naturalWidth > 0){
+    open();
+    return;
+  }
+  ensurePopupPhoto(img).then(open).catch(() => open());
 });
 // ── Persistence ────────────────────────────────────────────────────
 // Text/coords → localStorage (fast, small)
@@ -1891,8 +2121,9 @@ function saveFindings() {
 // map/editor use (cat/status/date/parcel names). Shared by loadFindings() and
 // editVisit() so the field mapping lives in one place.
 function mapApiFinding(f){
-  const pObj = parcels.find(p => p.id === f.parcel_id);
-  const parcelName = pObj ? pObj.parcel_name : '';
+  const pObj = parcels.find(p => p.id === f.parcel_id)
+    || (window._PARCELS || []).find(p => p.id === f.parcel_id);
+  const parcelName = pObj ? (pObj.parcel_name || pObj.name || '') : '';
 
   return {
     locId: f.id,
@@ -1940,8 +2171,9 @@ function loadFindings(){
   .then(data => {
     findings = data.findings.map(mapApiFinding);
     window._ptFindings = findings;
-    renderAllFindings();
-    showNotif('✅ Findings loaded');
+    return renderAllFindings().then(() => {
+      showNotif('✅ Findings loaded');
+    });
   })
   .catch(err => {
     console.error(err);
@@ -2425,12 +2657,7 @@ window._importFindingsData = function(arr, czArr){
       }));
       
       return uploadPhotosPromise.then(firstPhotos => {
-        // Trimmed + case-insensitive name→id match (see saveFinding).
-        const _norm = s => (s || '').trim().toLowerCase();
-        const pObj = loc.parcel
-          ? parcels.find(p => _norm(p.parcel_name) === _norm(loc.parcel))
-          : null;
-        const parcelId = pObj ? pObj.id : null;
+        const parcelId = resolveParcelId(loc.parcel, loc.lat, loc.lng);
         
         const payload = {
           siteId: currentSiteId,
@@ -2806,10 +3033,9 @@ async function exportFindingsPDF(sortBy='number'){
       }
       return null;
     }
-    function _makeThumb(b64){
+    function _makeThumb(dataUri){
       return new Promise(resolve=>{
         const img = new Image();
-        img.crossOrigin='anonymous'; // read S3 images untainted (needs bucket CORS)
         img.onload = ()=>{
           try{
             const S = 220;  // px — crisp at print size, tiny file weight
@@ -2822,17 +3048,18 @@ async function exportFindingsPDF(sortBy='number'){
           }catch(e){ resolve(null); }
         };
         img.onerror = ()=>resolve(null);
-        img.src = b64;
+        img.src = dataUri;
       });
     }
     if(!PDF_HIDE_FINDINGS){
-      for(const m of markers){
-        const b64 = _firstPhotoB64(m.loc);
-        if(b64){
-          const t = await _makeThumb(b64);
-          if(t) thumbs[m.loc.locId] = t;
-        }
-      }
+      await Promise.all(markers.map(async m => {
+        const src = _firstPhotoB64(m.loc);
+        if(!src) return;
+        const dataUri = await window.photoToDataUri(src);
+        if(!dataUri) return;
+        const t = await _makeThumb(dataUri);
+        if(t) thumbs[m.loc.locId] = t;
+      }));
     }
 
     // ── Place thumbnails — choose a ray direction per marker that ──
@@ -3290,32 +3517,19 @@ async function exportFindingsPDF(sortBy='number'){
           // narrower, more of them fit per row; landscape images are
           // wider so fewer fit per row.
           const MAX_W = 30, MAX_H = 40, gap = 3;
-          // Load a photo (base64 data-URI OR S3 https URL) and return its natural
-          // {w,h} PLUS a base64 data-URI. jsPDF.addImage() cannot fetch remote
-          // URLs, so S3 photos must be converted to data-URIs here (via a
-          // CORS-enabled canvas) or they silently fail to render.
-          function loadImg(src){
+          async function loadImg(src){
+            const data = await window.photoToDataUri(src);
+            if(!data) return { w:1, h:1, data:null };
             return new Promise(function(resolve){
               const img = new Image();
-              img.crossOrigin = 'anonymous'; // read S3 images untainted (needs bucket CORS)
               img.onload = function(){
-                let data = src;
-                // If it's a remote URL, redraw to canvas to get base64 pixels.
-                if(!/^data:/i.test(src)){
-                  try{
-                    const c = document.createElement('canvas');
-                    c.width = img.naturalWidth; c.height = img.naturalHeight;
-                    c.getContext('2d').drawImage(img, 0, 0);
-                    data = c.toDataURL('image/jpeg', 0.72);
-                  }catch(e){ data = null; }
-                }
                 resolve({ w: img.naturalWidth, h: img.naturalHeight, data });
               };
               img.onerror = function(){ resolve({ w:1, h:1, data:null }); };
-              img.src = src;
+              img.src = data;
             });
           }
-          // Resolve all photo dimensions + base64 data, then render
+          // Resolve all photo dimensions + base64 data in parallel, then render
           const dims = await Promise.all(visit.photos.map(p => loadImg(p)));
 
           // Build rows: each photo has its own pW/pH; pack into rows
