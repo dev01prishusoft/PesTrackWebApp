@@ -1507,7 +1507,7 @@ function saveFinding(){
   function resolvePendingPhotos(){
     const jobs = pendingPhotos.map(p => {
       if (typeof p !== 'string' || !p.startsWith('data:')) return Promise.resolve(p);
-      return uploadPhotoToServer(dataURLtoBlob(p)).then(res => res.url);
+      return uploadPhotoToServer(dataURLtoBlob(p)).then(res => res.key);
     });
     return Promise.all(jobs);
   }
@@ -1805,12 +1805,14 @@ async function fetchPhotoBlob(src){
   if(!window._photoBlobCache) window._photoBlobCache = new Map();
   if(window._photoBlobCache.has(key)) return window._photoBlobCache.get(key);
   const token = localStorage.getItem('pt_admin_token');
-  const res = await fetch(
-    '/api/findings/photo?siteId=' + encodeURIComponent(currentSiteId) +
-    '&key=' + encodeURIComponent(key),
-    { headers: { 'Authorization': 'Bearer ' + token } }
-  );
-  if(res.status === 401){ handleUnauthorized(); throw new Error('Unauthorized'); }
+  if(!token) throw new Error('Not logged in');
+  const qs = 'siteId=' + encodeURIComponent(currentSiteId) +
+    '&key=' + encodeURIComponent(key) +
+    '&access_token=' + encodeURIComponent(token);
+  const res = await fetch('/api/findings/photo?' + qs, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  if(res.status === 401) throw new Error('Unauthorized');
   if(!res.ok) throw new Error('Photo fetch failed');
   const blob = await res.blob();
   window._photoBlobCache.set(key, blob);
@@ -1822,7 +1824,17 @@ async function photoToDataUri(src){
   if(/^data:/i.test(src)) return src;
   if(s3KeyFromPhoto(src)){
     try{
-      const blob = await fetchPhotoBlob(src);
+      let blob;
+      try {
+        blob = await fetchPhotoBlob(src);
+      } catch(proxyErr) {
+        // Fallback: fetch presigned S3 URL directly (for PDF export when proxy fails).
+        if(/^https?:\/\//i.test(src)){
+          const r = await fetch(src);
+          if(r.ok) blob = await r.blob();
+        }
+        if(!blob) throw proxyErr;
+      }
       return await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -1840,6 +1852,8 @@ async function photoToDataUri(src){
 async function photoToDisplayUrl(src){
   if(!src) return '';
   if(/^data:/i.test(src)) return base64ToBlobUrl(src);
+  // Presigned S3 URLs work directly in <img> — no auth proxy needed.
+  if(/^https?:\/\//i.test(src)) return src;
   if(s3KeyFromPhoto(src)){
     try{
       const blob = await fetchPhotoBlob(src);
@@ -1848,7 +1862,7 @@ async function photoToDisplayUrl(src){
       return url;
     }catch(e){
       console.warn('photoToDisplayUrl failed:', e);
-      return src;
+      return '';
     }
   }
   return src;
