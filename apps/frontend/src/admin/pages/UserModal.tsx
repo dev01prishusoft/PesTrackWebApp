@@ -3,13 +3,16 @@ import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { MultiSelect } from '../components/ui/MultiSelect';
 import {
-  useCreateUser, useUpdateUser, useResetPassword, useAllSites,
+  useCreateUser, useUpdateUser, useResetPassword, useAllSites, useActiveAdminCount,
 } from '../api/queries';
 import { useToast } from '../../components/Toast';
 import type { User } from '../lib/types';
 
 const inputCls =
   'w-full px-3 py-2 text-sm rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40';
+
+const ADMIN_DEACTIVATION_ERROR =
+  'At least 2 active admins are required. Promote another user to admin before deactivating this account.';
 
 export function UserModal({ user, onClose }: { user: User | null; onClose: () => void }) {
   const editing = !!user;
@@ -20,6 +23,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   const updateUser = useUpdateUser();
   const resetPw = useResetPassword();
   const toast = useToast();
+  const { data: activeAdminCount } = useActiveAdminCount(editing && user?.role === 'admin' && user.is_active);
 
   const [fullName, setFullName] = useState(user?.full_name ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
@@ -92,13 +96,23 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
       }
     }
 
-    // Engineers and client_viewers must be assigned at least one site. Admins
-    // are exempt (they have access to every site — the field is hidden).
-    if (!isAdmin && siteIds.length === 0) {
-      errors.siteIds = 'At least one site must be assigned';
-    }
+  // Engineers and client_viewers must be assigned at least one site. Admins
+  // are exempt (they have access to every site — the field is hidden).
+  if (!isAdmin && siteIds.length === 0) {
+    errors.siteIds = 'At least one site must be assigned';
+  }
 
-    if (Object.keys(errors).length > 0) {
+  if (
+    editing
+    && user?.role === 'admin'
+    && user.is_active
+    && !isActive
+    && (activeAdminCount ?? 0) < 3
+  ) {
+    errors.isActive = ADMIN_DEACTIVATION_ERROR;
+  }
+
+  if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
     }
@@ -161,6 +175,18 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
     } catch (e) {
       setErr((e as Error).message);
     }
+  }
+
+  const cannotDeactivateAdmin =
+    isAdmin && user?.is_active && (activeAdminCount ?? 0) < 3;
+
+  function toggleActive() {
+    if (isActive && cannotDeactivateAdmin) {
+      toast.error(ADMIN_DEACTIVATION_ERROR);
+      return;
+    }
+    setIsActive(!isActive);
+    setFieldErrors((prev) => ({ ...prev, isActive: '' }));
   }
 
   return (
@@ -291,10 +317,11 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                 <span className="text-foreground">{isActive ? 'Active' : 'Inactive'}</span>
                 <button
                   type="button"
-                  onClick={() => setIsActive(!isActive)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring/40 ${
+                  onClick={toggleActive}
+                  disabled={isActive && !!cannotDeactivateAdmin}
+                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring/40 ${
                     isActive ? 'bg-primary' : 'bg-muted-foreground/30'
-                  }`}
+                  } ${cannotDeactivateAdmin && isActive ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -303,6 +330,10 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                   />
                 </button>
               </div>
+              {fieldErrors.isActive && <p className="text-destructive text-xs mt-1">{fieldErrors.isActive}</p>}
+              {cannotDeactivateAdmin && isActive && !fieldErrors.isActive && (
+                <p className="text-muted-foreground text-xs mt-1">{ADMIN_DEACTIVATION_ERROR}</p>
+              )}
             </div>
 
             {!isAdmin && (

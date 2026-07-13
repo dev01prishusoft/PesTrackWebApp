@@ -11,12 +11,24 @@ export function useUsers(params: ListParams & { role?: string; isActive?: string
   });
 }
 
+export function useActiveAdminCount(enabled = true) {
+  return useQuery({
+    queryKey: ['admin_users', 'active_admin_count'],
+    queryFn: () =>
+      api<Paginated<User>>(`/api/users${qs({ page: 1, limit: 1, role: 'admin', isActive: 'true' })}`),
+    select: (r) => r.pagination.total,
+    enabled,
+  });
+}
+
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       api('/api/users', { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin_users'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin_users'] });
+    },
   });
 }
 
@@ -25,7 +37,9 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
       api(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin_users'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin_users'] });
+    },
   });
 }
 
@@ -33,7 +47,9 @@ export function useDeactivateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api(`/api/users/${id}`, { method: 'DELETE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin_users'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin_users'] });
+    },
   });
 }
 

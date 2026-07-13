@@ -9,6 +9,28 @@ const {
 
 const VALID_ROLES = ['admin', 'engineer', 'client_viewer'];
 const USER_SORT_COLS = ['u.full_name', 'u.username', 'u.email', 'u.role', 'u.is_active', 'u.created_at', 'u.last_login'];
+const MIN_ACTIVE_ADMINS = 2;
+const ADMIN_DEACTIVATION_ERROR =
+  'At least 2 active admins are required. Promote another user to admin before deactivating this account.';
+
+// Block deactivating/deleting an active admin when it would leave fewer than
+// MIN_ACTIVE_ADMINS active admins in the system.
+async function assertCanRemoveActiveAdmin(userId) {
+  const { rows } = await query(
+    'SELECT role, is_active FROM users WHERE id = $1',
+    [userId]
+  );
+  if (!rows[0] || rows[0].role !== 'admin' || !rows[0].is_active) return;
+
+  const { rows: countRows } = await query(
+    `SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin' AND is_active = true`
+  );
+  if (countRows[0].count - 1 < MIN_ACTIVE_ADMINS) {
+    const err = new Error(ADMIN_DEACTIVATION_ERROR);
+    err.status = 400;
+    throw err;
+  }
+}
 
 // Check username / email / full_name aren't already taken by ANOTHER user.
 // Case-insensitive. Returns a { field: message } map for any collisions, so the
@@ -171,6 +193,10 @@ async function updateUser(req, res, next) {
       return res.status(400).json({ error: conflictMessage(conflicts), fields: conflicts });
     }
 
+    if (isActive === false) {
+      await assertCanRemoveActiveAdmin(req.params.id);
+    }
+
     let before = null;
     const updated = await withTransaction(async (client) => {
       // Snapshot the row (and its site assignments) before updating, for the audit log.
@@ -239,6 +265,8 @@ async function deactivateUser(req, res, next) {
 
     const exists = await query('SELECT id FROM users WHERE id = $1', [userId]);
     if (!exists.rows[0]) return res.status(404).json({ error: 'User not found' });
+
+    await assertCanRemoveActiveAdmin(userId);
 
     // Count references in each table that would be orphaned by a delete.
     const { rows } = await query(
