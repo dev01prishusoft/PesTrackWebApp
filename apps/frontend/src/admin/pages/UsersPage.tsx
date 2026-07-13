@@ -48,9 +48,11 @@ export function UsersPage() {
       id: 'sites', header: 'Sites',
       cell: ({ row }) => (
         <span className="text-sm font-medium text-foreground">
-          {row.original.sites.length
-            ? row.original.sites.map((s) => s.name).join(', ')
-            : <span className="text-muted-foreground">—</span>}
+          {row.original.role === 'admin'
+            ? 'All sites'
+            : row.original.sites.length
+              ? row.original.sites.map((s) => s.name).join(', ')
+              : <span className="text-muted-foreground">—</span>}
         </span>
       ),
     },
