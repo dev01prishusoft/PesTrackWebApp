@@ -149,27 +149,38 @@ async function createUser(req, res, next) {
       return res.status(400).json({ error: conflictMessage(conflicts), fields: conflicts });
     }
 
+    const effectiveRole = role || 'engineer';
+
+    if (effectiveRole !== 'admin' && (!siteIds || siteIds.length === 0)) {
+      return res.status(400).json({
+        error: 'At least one site must be assigned',
+        fields: { siteIds: 'At least one site must be assigned' },
+      });
+    }
+
     const hash = await bcrypt.hash(password, 12);
 
     const user = await withTransaction(async (client) => {
       const { rows } = await client.query(
         `INSERT INTO users (username, email, password_hash, full_name, role, is_active)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, username, email, full_name, role, is_active`,
-        [username, email, hash, fullName || null, role || 'engineer', isActive !== false]
+        [username, email, hash, fullName || null, effectiveRole, isActive !== false]
       );
       const created = rows[0];
-      for (const siteId of siteIds || []) {
-        await client.query(
-          `INSERT INTO user_sites (user_id, site_id) VALUES ($1,$2)
-           ON CONFLICT (user_id, site_id) DO NOTHING`,
-          [created.id, siteId]
-        );
+      if (effectiveRole !== 'admin') {
+        for (const siteId of siteIds || []) {
+          await client.query(
+            `INSERT INTO user_sites (user_id, site_id) VALUES ($1,$2)
+             ON CONFLICT (user_id, site_id) DO NOTHING`,
+            [created.id, siteId]
+          );
+        }
       }
       return created;
     });
 
     await logAction({ req, action: 'CREATE', tableName: 'users', recordId: user.id,
-      newValues: { username, email, role: role || 'engineer', isActive: isActive !== false, siteIds: siteIds || [] } });
+      newValues: { username, email, role: effectiveRole, isActive: isActive !== false, siteIds: effectiveRole === 'admin' ? [] : (siteIds || []) } });
     res.status(201).json({ user });
   } catch (err) {
     next(err);
@@ -228,8 +239,12 @@ async function updateUser(req, res, next) {
       );
       if (!rows[0]) return null;
 
-      // If siteIds provided, replace the assignment set.
-      if (Array.isArray(siteIds)) {
+      const effectiveRole = role ?? cur.rows[0].role;
+
+      // Admins have access to all sites — clear any site assignments.
+      if (effectiveRole === 'admin') {
+        await client.query('DELETE FROM user_sites WHERE user_id = $1', [req.params.id]);
+      } else if (Array.isArray(siteIds)) {
         await client.query('DELETE FROM user_sites WHERE user_id = $1', [req.params.id]);
         for (const siteId of siteIds) {
           await client.query(

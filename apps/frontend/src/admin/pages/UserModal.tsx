@@ -16,9 +16,8 @@ const ADMIN_DEACTIVATION_ERROR =
 
 export function UserModal({ user, onClose }: { user: User | null; onClose: () => void }) {
   const editing = !!user;
-  // Editing an admin: role is locked and site assignment doesn't apply
-  // (admins have access to every site).
-  const isAdmin = editing && user?.role === 'admin';
+  // Editing an existing admin: role is locked (admins have access to every site).
+  const isEditingAdmin = editing && user?.role === 'admin';
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const resetPw = useResetPassword();
@@ -29,6 +28,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   const [username, setUsername] = useState(user?.username ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [role, setRole] = useState(user?.role ?? 'engineer');
+  const isAdminRole = role === 'admin';
   const [isActive, setIsActive] = useState(user?.is_active ?? true);
   const [err, setErr] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -98,7 +98,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
   // Engineers and client_viewers must be assigned at least one site. Admins
   // are exempt (they have access to every site — the field is hidden).
-  if (!isAdmin && siteIds.length === 0) {
+  if (!isAdminRole && siteIds.length === 0) {
     errors.siteIds = 'At least one site must be assigned';
   }
 
@@ -119,10 +119,11 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
     setFieldErrors({});
 
     try {
+      const sitePayload = isAdminRole ? [] : siteIds;
       if (editing) {
         await updateUser.mutateAsync({
           id: user!.id,
-          body: { fullName, email, role, isActive, siteIds },
+          body: { fullName, email, role, isActive, siteIds: sitePayload },
         });
         toast.success('Updated successfully.');
       } else {
@@ -133,7 +134,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
           fullName,
           role,
           isActive,
-          siteIds,
+          siteIds: sitePayload,
         });
         toast.success('Saved successfully.');
       }
@@ -178,7 +179,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   }
 
   const cannotDeactivateAdmin =
-    isAdmin && user?.is_active && (activeAdminCount ?? 0) < 3;
+    isEditingAdmin && user?.is_active && (activeAdminCount ?? 0) < 3;
 
   function toggleActive() {
     if (isActive && cannotDeactivateAdmin) {
@@ -234,15 +235,19 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Role <span className="text-destructive">*</span></label>
               <select
-                className={`${inputCls} ${isAdmin ? 'opacity-60 bg-muted cursor-not-allowed' : ''}`}
+                className={`${inputCls} ${isEditingAdmin ? 'opacity-60 bg-muted cursor-not-allowed' : ''}`}
                 value={role}
-                onChange={(e) => { setRole(e.target.value as User['role']); setFieldErrors(prev => ({ ...prev, role: '' })); }}
-                disabled={isAdmin}
+                onChange={(e) => {
+                  const nextRole = e.target.value as User['role'];
+                  setRole(nextRole);
+                  if (nextRole === 'admin') setSiteIds([]);
+                  setFieldErrors((prev) => ({ ...prev, role: '', siteIds: '' }));
+                }}
+                disabled={isEditingAdmin}
               >
+                <option value="admin">Admin</option>
                 <option value="engineer">Engineer</option>
                 <option value="client_viewer">Client Viewer</option>
-                {/* Admin role is fixed for existing admins and cannot be created here. */}
-                {isAdmin && <option value="admin">Admin</option>}
               </select>
               {fieldErrors.role && <p className="text-destructive text-xs mt-1">{fieldErrors.role}</p>}
             </div>
@@ -336,7 +341,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
               )}
             </div>
 
-            {!isAdmin && (
+            {!isAdminRole && (
             <div className="sm:col-span-2 mt-2">
               <label className="block text-xs font-semibold text-muted-foreground mb-2">Assigned Sites <span className="text-destructive">*</span></label>
               <MultiSelect
