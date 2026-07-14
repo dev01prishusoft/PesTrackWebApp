@@ -27,7 +27,10 @@ function EntryRouter() {
   if (loading) return null;
   if (!user) return <Navigate to="/admin/login" replace />;
   if (user.role === 'admin') return <Navigate to="/admin/users" replace />;
-  return <Navigate to="/frontend/dashboard" replace />;
+  
+  // Non-admins should use the map app, not the React dashboard
+  window.location.replace('/PesTrack.html');
+  return null;
 }
 
 function RequireAuth({ children, requireAdmin }: { children: React.ReactNode; requireAdmin?: boolean }) {
@@ -49,7 +52,8 @@ function RequireAuth({ children, requireAdmin }: { children: React.ReactNode; re
   }
 
   if (requireAdmin && user.role !== 'admin') {
-    return <Navigate to="/frontend/dashboard" replace />;
+    window.location.replace('/PesTrack.html');
+    return null;
   }
 
   return children;

@@ -27,9 +27,9 @@ export function LoginPage() {
     if (user) {
       if (isAdminLogin) {
         if (user.role === 'admin') navigate('/admin/users', { replace: true });
-        else navigate('/frontend/dashboard', { replace: true });
+        else window.location.replace('/PesTrack.html');
       } else {
-        navigate('/frontend/dashboard', { replace: true });
+        window.location.replace('/PesTrack.html');
       }
     }
   }, [user, loading, navigate, isAdminLogin]);
