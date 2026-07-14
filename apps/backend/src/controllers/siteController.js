@@ -132,7 +132,7 @@ async function deleteSite(req, res, next) {
     );
     if (!rows[0]) return res.status(404).json({ error: 'Site not found' });
     await logAction({ req, action: 'DELETE', tableName: 'sites', recordId: rows[0].id,
-      siteId: rows[0].id });
+      oldValues: rows[0] });
     res.json({ site: rows[0] });
   } catch (err) {
     if (err.code === '23503') {

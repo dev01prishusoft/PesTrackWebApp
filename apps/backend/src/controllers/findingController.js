@@ -499,12 +499,12 @@ async function deleteVisit(req, res, next) {
     // Site-based access: any admin/assigned engineer may delete any visit here.
     // Grab the visit's photo keys before the row (and its photos) are deleted.
     const photoKeys = await photoKeysForVisits([req.params.visitId]);
-    const { rowCount } = await query('DELETE FROM visits WHERE id = $1 AND location_id = $2',
+    const { rowCount, rows } = await query('DELETE FROM visits WHERE id = $1 AND location_id = $2 RETURNING *',
       [req.params.visitId, location.id]);
     if (!rowCount) return res.status(404).json({ error: 'Visit not found' });
     deletePhotos(photoKeys);
 
-    await logAction({ req, action: 'DELETE', tableName: 'visits', recordId: req.params.visitId, siteId });
+    await logAction({ req, action: 'DELETE', tableName: 'visits', recordId: req.params.visitId, siteId, oldValues: rows[0] });
     res.json({ message: 'Visit deleted' });
   } catch (err) {
     next(err);
@@ -516,14 +516,14 @@ async function deleteFinding(req, res, next) {
     const siteId = req.query.siteId;
     // Collect all photo keys under this finding before the cascade deletes them.
     const photoKeys = await photoKeysForLocations([req.params.locationId]);
-    const { rowCount } = await query('DELETE FROM locations WHERE id = $1 AND site_id = $2', [
+    const { rowCount, rows } = await query('DELETE FROM locations WHERE id = $1 AND site_id = $2 RETURNING *', [
       req.params.locationId,
       siteId,
     ]);
     if (!rowCount) return res.status(404).json({ error: 'Finding not found' });
     deletePhotos(photoKeys);
 
-    await logAction({ req, action: 'DELETE', tableName: 'locations', recordId: req.params.locationId, siteId });
+    await logAction({ req, action: 'DELETE', tableName: 'locations', recordId: req.params.locationId, siteId, oldValues: rows[0] });
     res.json({ message: 'Finding deleted' });
   } catch (err) {
     next(err);

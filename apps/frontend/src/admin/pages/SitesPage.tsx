@@ -59,8 +59,9 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const userOptions = useMemo(() => {
     if (!allUsers) return [];
     // Admins have access to every site already, so they aren't assignable here.
+    // Also, don't show inactive users in the assignment dropdown.
     return allUsers
-      .filter((u) => u.role !== 'admin')
+      .filter((u) => u.role !== 'admin' && u.is_active)
       .map((u) => ({
         id: u.id,
         name: `${u.full_name || u.username} (${u.role.replace('_', ' ')})`,

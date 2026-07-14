@@ -310,8 +310,8 @@ async function deactivateUser(req, res, next) {
     }
 
     // No work references — safe to hard delete (user_sites cascades).
-    await logAction({ req, action: 'DELETE', tableName: 'users', recordId: userId });
-    await query('DELETE FROM users WHERE id = $1', [userId]);
+    const { rows: delRows } = await query('DELETE FROM users WHERE id = $1 RETURNING username, role', [userId]);
+    await logAction({ req, action: 'DELETE', tableName: 'users', recordId: userId, oldValues: delRows[0] });
     res.json({ message: 'User deleted' });
   } catch (err) {
     // Safety net for any FK we didn't explicitly check.
