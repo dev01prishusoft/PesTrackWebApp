@@ -390,6 +390,13 @@ window.triggerImport = triggerImport;
 function importFindings(input){
   const file = input.files[0];
   if(!file) return;
+
+  if (!window._PARCELS || window._PARCELS.length === 0) {
+    if (!confirm("⚠️ No parcels loaded. Upload Parcel XLSX first, then import JSON.")) {
+      return;
+    }
+  }
+
   const reader = new FileReader();
   reader.onload = e => {
     // Step 1: parse JSON — only this throws "Invalid JSON"
