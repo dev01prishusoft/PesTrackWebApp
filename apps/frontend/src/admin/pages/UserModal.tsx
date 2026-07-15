@@ -23,7 +23,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   const resetPw = useResetPassword();
   const toast = useToast();
   const { data: activeAdminCount } = useActiveAdminCount(editing && user?.role === 'admin' && user.is_active);
-  const { data: userDetails } = useUser(user?.id);
+  const { data: userDetails, isLoading: isLoadingUser } = useUser(user?.id);
 
   const [fullName, setFullName] = useState(user?.full_name ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
@@ -214,10 +214,24 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
 
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {err && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm mb-4">{err}</div>}
+          {isLoadingUser ? (
+            <div className="flex flex-col justify-center items-center h-40 gap-4 text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(45, 138, 78, 0.2)',
+                borderTop: '3px solid #2d8a4e',
+                borderRadius: '50%',
+                animation: 'global-spin 1s linear infinite',
+              }}></div>
+              <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
+            </div>
+          ) : (
+            <>
+              {err && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm mb-4">{err}</div>}
 
-          {/* Grid layout with normal bottom padding since dropdown opens upwards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
+              {/* Grid layout with normal bottom padding since dropdown opens upwards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Full name <span className="text-destructive">*</span></label>
               <input className={inputCls} maxLength={255} value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => ({ ...prev, fullName: '' })); }} placeholder="Full Name" autoComplete="off" name="new-fullname" />
@@ -446,12 +460,14 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
               </div>
             </div>
           )}
+            </>
+          )}
         </div>
 
         {/* Fixed Footer */}
         <div className="flex justify-between items-center px-6 py-4 border-t border-border bg-muted/10">
           <div>
-            {editing && !isResettingPw && (
+            {editing && !isResettingPw && !isLoadingUser && (
               <Button variant="outline" size="sm" onClick={() => setIsResettingPw(true)}>
                 <KeyRound size={14} className="mr-1" /> Reset Password
               </Button>
@@ -459,7 +475,9 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={save} disabled={createUser.isPending || updateUser.isPending}>Save</Button>
+            <Button onClick={save} disabled={isLoadingUser || createUser.isPending || updateUser.isPending}>
+              {createUser.isPending || updateUser.isPending ? 'Saving…' : 'Save'}
+            </Button>
           </div>
         </div>
       </div>

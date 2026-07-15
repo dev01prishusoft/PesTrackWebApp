@@ -38,11 +38,17 @@ function RequireAuth({ children, requireAdmin }: { children: React.ReactNode; re
   
   if (loading) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-slate-100">
-        <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-        <h2 className="text-sm font-semibold tracking-wider uppercase text-slate-400">
-          Loading PesTrack Frontend...
-        </h2>
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div style={{
+          width: '40px',
+          height: '40px',
+          border: '3px solid rgba(45, 138, 78, 0.2)',
+          borderTop: '3px solid #2d8a4e',
+          borderRadius: '50%',
+          animation: 'global-spin 1s linear infinite',
+          marginBottom: '16px'
+        }}></div>
+        <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
       </div>
     );
   }

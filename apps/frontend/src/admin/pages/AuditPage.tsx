@@ -40,7 +40,7 @@ export function AuditPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [payloadRow, setPayloadRow] = useState<AuditLog | null>(null);
-  const { data, isLoading, isError, error } = useAudit({
+  const { data, isLoading, isFetching, isError, error } = useAudit({
     ...ls.params,
     action: action || undefined,
     from: from || undefined,
@@ -109,7 +109,7 @@ export function AuditPage() {
         onPageChange={ls.setPage}
         sortState={ls.sortState}
         onSortChange={ls.changeSort}
-        isLoading={isLoading}
+        isLoading={isFetching}
         emptyLabel="audit entries"
       />
 

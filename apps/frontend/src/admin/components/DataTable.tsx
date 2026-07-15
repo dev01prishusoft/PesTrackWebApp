@@ -51,7 +51,20 @@ export function DataTable<T>({
 
   return (
     <div className="w-full max-w-full bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
-      <div className="w-full overflow-auto flex-1 min-h-0">
+      <div className="w-full overflow-auto flex-1 min-h-0 relative">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 flex flex-col justify-center items-center gap-4 bg-white/50 backdrop-blur-[1px] text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid rgba(45, 138, 78, 0.2)',
+              borderTop: '3px solid #2d8a4e',
+              borderRadius: '50%',
+              animation: 'global-spin 1s linear infinite',
+            }}></div>
+            <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
+          </div>
+        )}
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -85,13 +98,7 @@ export function DataTable<T>({
             ))}
           </TableHeader>
           <TableBody>
-            {isLoading && data.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-10 text-center text-muted-foreground">
-                  Loading…
-                </td>
-              </tr>
-            ) : data.length === 0 ? (
+            {data.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center text-muted-foreground">

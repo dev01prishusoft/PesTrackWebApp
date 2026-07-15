@@ -15,7 +15,7 @@ import type { User } from '../lib/types';
 export function UsersPage() {
   const ls = useListState({ sort: 'u.created_at', order: 'desc' });
   const [roleFilter, setRoleFilter] = useState('');
-  const { data, isLoading, isError, error } = useUsers({ ...ls.params, role: roleFilter || undefined });
+  const { data, isLoading, isFetching, isError, error } = useUsers({ ...ls.params, role: roleFilter || undefined });
   const [editing, setEditing] = useState<User | null | undefined>(undefined);
   const deleteUser = useDeactivateUser();
   const confirm = useAdminConfirm();
@@ -113,7 +113,7 @@ export function UsersPage() {
         onPageChange={ls.setPage}
         sortState={ls.sortState}
         onSortChange={ls.changeSort}
-        isLoading={isLoading}
+        isLoading={isFetching}
         emptyLabel="users"
       />
 

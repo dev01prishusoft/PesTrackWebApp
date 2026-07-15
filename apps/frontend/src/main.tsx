@@ -8,9 +8,15 @@ let activeRequests = 0;
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
   const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
+  
+  // The React application uses React Query which provides fine-grained, localized
+  // loading states (spinners on buttons, loaders in tables, etc).
+  // We completely bypass this legacy global full-screen interceptor for the admin portal.
+  const isAdminPortal = window.location.pathname.startsWith('/admin');
   const isAuthRequest = requestUrl.includes('/api/auth/');
   const isLoginPage = window.location.pathname.includes('login');
-  const skipLoader = isAuthRequest || isLoginPage;
+  
+  const skipLoader = isAdminPortal || isAuthRequest || isLoginPage;
 
   if (!skipLoader) {
     activeRequests++;

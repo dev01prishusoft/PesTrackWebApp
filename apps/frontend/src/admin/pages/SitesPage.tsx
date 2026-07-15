@@ -31,7 +31,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const toast = useToast();
   const create = useCreateSite();
   const update = useUpdateSite();
-  const { data: siteDetails } = useSite(site?.id);
+  const { data: siteDetails, isLoading: isLoadingSite } = useSite(site?.id);
   const [userSearch, setUserSearch] = useState('');
   const { data: infiniteUsersData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteUsers(50, userSearch);
   const assignUser = useAssignUserToSite();
@@ -187,9 +187,21 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
-            <div>
+          {isLoadingSite ? (
+            <div className="flex flex-col justify-center items-center h-40 gap-4 text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(45, 138, 78, 0.2)',
+                borderTop: '3px solid #2d8a4e',
+                borderRadius: '50%',
+                animation: 'global-spin 1s linear infinite',
+              }}></div>
+              <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
+              <div>
               <label className={labelCls}>Site name <span className="text-destructive">*</span></label>
               <input className={inputCls} maxLength={255} value={name} onChange={(e) => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: '' })); }} placeholder="Site Name" />
               {fieldErrors.name && <p className="text-destructive text-xs mt-1">{fieldErrors.name}</p>}
@@ -238,11 +250,14 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
               />
             </div>
           </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-border bg-muted/10">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={create.isPending || update.isPending}>Save</Button>
+          <Button onClick={save} disabled={isLoadingSite || create.isPending || update.isPending}>
+            {create.isPending || update.isPending ? 'Saving…' : 'Save'}
+          </Button>
         </div>
       </div>
     </div>
@@ -251,7 +266,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 
 export function SitesPage() {
   const ls = useListState({ sort: 'created_at', order: 'desc' });
-  const { data, isLoading, isError, error } = useSites(ls.params);
+  const { data, isLoading, isFetching, isError, error } = useSites(ls.params);
   const deleteSite = useDeleteSite();
   const confirm = useAdminConfirm();
   const toast = useToast();
@@ -306,7 +321,7 @@ export function SitesPage() {
         onPageChange={ls.setPage}
         sortState={ls.sortState}
         onSortChange={ls.changeSort}
-        isLoading={isLoading}
+        isLoading={isFetching}
         emptyLabel="sites"
       />
       {editing !== undefined && <SiteModal site={editing} onClose={() => setEditing(undefined)} />}
