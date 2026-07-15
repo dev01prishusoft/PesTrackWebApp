@@ -199,21 +199,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h3>📋 PDF Report — Sort Order</h3>
     <p style="font-size:.78rem;color:#64748B;margin:0 0 12px">Choose how findings are ordered in the report:</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="number" checked style="accent-color:#7C3AED">
-        <span><strong>Finding #</strong> <span style="color:#94A3B8;font-size:.75rem">(default — sequential order)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:4px 0;text-transform:none;text-align:left;">
+        <input type="radio" name="pdf-sort" value="number" checked style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Finding #</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(default — sequential order)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="category" style="accent-color:#7C3AED">
-        <span><strong>By Category</strong> <span style="color:#94A3B8;font-size:.75rem">(grouped by pest type)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:4px 0;text-transform:none;text-align:left;">
+        <input type="radio" name="pdf-sort" value="category" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Category</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(grouped by pest type)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="escalated" style="accent-color:#7C3AED">
-        <span><strong>By Assigned / Escalated To</strong> <span style="color:#94A3B8;font-size:.75rem">(based on most recent escalation)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:4px 0;text-transform:none;text-align:left;">
+        <input type="radio" name="pdf-sort" value="escalated" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Assigned / Escalated To</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(based on most recent escalation)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="quadrant" style="accent-color:#7C3AED">
-        <span><strong>By Quadrant &amp; Parcel</strong> <span style="color:#94A3B8;font-size:.75rem">(NW → NE → SW → SE, then by parcel/area)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:4px 0;text-transform:none;text-align:left;">
+        <input type="radio" name="pdf-sort" value="quadrant" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Quadrant &amp; Parcel</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(NW → NE → SW → SE, then by parcel/area)</span>
+        </div>
       </label>
     </div>
     <div class="mbtns">
