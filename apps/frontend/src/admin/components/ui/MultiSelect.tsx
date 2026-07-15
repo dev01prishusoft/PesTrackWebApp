@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 
@@ -8,6 +8,10 @@ interface MultiSelectProps {
   onChange: (ids: number[]) => void;
   placeholder?: string;
   openDirection?: 'up' | 'down';
+  onSearchChange?: (search: string) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoading?: boolean;
 }
 
 export function MultiSelect({
@@ -16,9 +20,14 @@ export function MultiSelect({
   onChange,
   placeholder = 'Select sites...',
   openDirection = 'down',
+  onSearchChange,
+  onLoadMore,
+  hasMore,
+  isLoading,
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
+  const searchQuery = onSearchChange ? '' : localSearch;
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // Fixed-position coords so the menu escapes any overflow-clipping ancestor
@@ -68,11 +77,16 @@ export function MultiSelect({
     };
   }, []);
 
-  const filteredOptions = options.filter((opt) =>
-    opt.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredOptions = useMemo(() => {
+    if (onSearchChange) return options; // If server-side search is provided, options are already filtered
+    if (!searchQuery) return options;
+    const lower = searchQuery.toLowerCase();
+    return options.filter((opt: { name: string }) => opt.name.toLowerCase().includes(lower));
+  }, [options, searchQuery, onSearchChange]);
 
-  const selectedOptions = options.filter((opt) => selectedIds.includes(opt.id));
+  const selectedOptions = useMemo(() => {
+    return options.filter((opt: { id: number }) => selectedIds.includes(opt.id));
+  }, [options, selectedIds]);
 
   function toggleOption(id: number) {
     if (selectedIds.includes(id)) {
@@ -149,8 +163,14 @@ export function MultiSelect({
             <Search size={14} className="text-muted-foreground shrink-0" />
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={onSearchChange ? undefined : localSearch}
+              onChange={(e) => {
+                if (onSearchChange) {
+                  onSearchChange(e.target.value);
+                } else {
+                  setLocalSearch(e.target.value);
+                }
+              }}
               placeholder="Search..."
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               autoFocus
@@ -158,7 +178,13 @@ export function MultiSelect({
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  if (onSearchChange) {
+                    onSearchChange('');
+                  } else {
+                    setLocalSearch('');
+                  }
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X size={14} />
@@ -179,11 +205,19 @@ export function MultiSelect({
             </div>
           </div>
 
-          <div className="overflow-y-auto flex-1 py-1 max-h-[160px]">
+          <div 
+            className="overflow-y-auto flex-1 py-1 max-h-[350px]"
+            onScroll={(e) => {
+              const target = e.target as HTMLDivElement;
+              if (target.scrollHeight - target.scrollTop <= target.clientHeight + 10) {
+                if (hasMore && !isLoading && onLoadMore) onLoadMore();
+              }
+            }}
+          >
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-4 text-center text-sm text-muted-foreground">No options found</div>
             ) : (
-              filteredOptions.map((opt) => {
+              filteredOptions.map((opt: { id: number, name: string }) => {
                 const isSelected = selectedIds.includes(opt.id);
                 return (
                   <div
@@ -207,6 +241,7 @@ export function MultiSelect({
                 );
               })
             )}
+            {isLoading && <div className="px-3 py-2 text-center text-xs text-muted-foreground">Loading more...</div>}
           </div>
         </div>,
         document.body

@@ -53,6 +53,26 @@ async function listSites(req, res, next) {
     next(err);
   }
 }
+async function getSite(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { rows } = await query(`
+      SELECT s.*, 
+             COALESCE(json_agg(json_build_object('id', u.id, 'name', COALESCE(u.full_name, u.username)))
+                      FILTER (WHERE u.id IS NOT NULL), '[]') AS users
+      FROM sites s
+      LEFT JOIN user_sites us ON us.site_id = s.id
+      LEFT JOIN users u ON u.id = us.user_id
+      WHERE s.id = $1
+      GROUP BY s.id
+    `, [id]);
+    
+    if (!rows[0]) return res.status(404).json({ error: 'Site not found' });
+    res.json({ site: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+}
 
 // True when another site already uses this name (case-insensitive).
 // `excludeId` skips the site being edited.
@@ -174,5 +194,7 @@ async function removeUser(req, res, next) {
 }
 
 module.exports = {
-  listSites, createSite, updateSite, deleteSite, assignUser, removeUser,
+  listSites, getSite, createSite, updateSite, deleteSite,
+  assignUser,
+  removeUser,
 };

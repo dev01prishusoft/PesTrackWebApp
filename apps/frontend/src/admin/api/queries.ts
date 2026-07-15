@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { api, qs } from '../../lib/api';
 import type { Paginated, User, Site, AuditLog, ListParams } from '../lib/types';
 
@@ -8,6 +8,14 @@ export function useUsers(params: ListParams & { role?: string; isActive?: string
     queryKey: ['admin_users', params],
     queryFn: () => api<Paginated<User>>(`/api/users${qs(params)}`),
     placeholderData: (prev) => prev,
+  });
+}
+
+export function useUser(id: number | undefined) {
+  return useQuery({
+    queryKey: ['admin_user', id],
+    queryFn: () => api<{ user: User }>(`/api/users/${id}`).then(res => res.user),
+    enabled: !!id,
   });
 }
 
@@ -69,13 +77,17 @@ export function useSites(params: ListParams & { status?: string }) {
   });
 }
 
-export function useAllSites() {
-  return useQuery({
-    queryKey: ['admin_sites', 'all'],
-    queryFn: () => api<Paginated<Site>>(`/api/sites${qs({ page: 1, limit: 10000 })}`),
-    select: (r) => r.data,
+
+export function useInfiniteSites(limit: number = 5, search: string = '') {
+  return useInfiniteQuery({
+    queryKey: ['admin_sites', 'infinite', limit, search],
+    queryFn: ({ pageParam = 1 }) => api<Paginated<Site>>(`/api/sites${qs({ page: pageParam, limit, search })}`),
+    getNextPageParam: (lastPage) => 
+      lastPage.pagination.page < lastPage.pagination.totalPages ? lastPage.pagination.page + 1 : undefined,
+    initialPageParam: 1,
   });
 }
+
 
 export function useCreateSite() {
   const qc = useQueryClient();
@@ -114,11 +126,21 @@ export function useAudit(
   });
 }
 
-export function useAllUsers() {
+export function useSite(id: number | undefined) {
   return useQuery({
-    queryKey: ['admin_users', 'all'],
-    queryFn: () => api<Paginated<User>>(`/api/users${qs({ page: 1, limit: 10000 })}`),
-    select: (r) => r.data,
+    queryKey: ['admin_sites', id],
+    queryFn: () => api<{ site: Site }>(`/api/sites/${id}`).then(res => res.site),
+    enabled: !!id,
+  });
+}
+
+export function useInfiniteUsers(limit: number = 50, search: string = '') {
+  return useInfiniteQuery({
+    queryKey: ['admin_users', 'infinite', limit, search],
+    queryFn: ({ pageParam = 1 }) => api<Paginated<User>>(`/api/users${qs({ page: pageParam, limit, search })}`),
+    getNextPageParam: (lastPage) => 
+      lastPage.pagination.page < lastPage.pagination.totalPages ? lastPage.pagination.page + 1 : undefined,
+    initialPageParam: 1,
   });
 }
 

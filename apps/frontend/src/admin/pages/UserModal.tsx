@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { MultiSelect } from '../components/ui/MultiSelect';
 import {
-  useCreateUser, useUpdateUser, useResetPassword, useAllSites, useActiveAdminCount,
+  useCreateUser, useUpdateUser, useResetPassword, useInfiniteSites, useActiveAdminCount, useUser
 } from '../api/queries';
 import { useToast } from '../../components/Toast';
 import type { User } from '../lib/types';
@@ -23,6 +23,7 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   const resetPw = useResetPassword();
   const toast = useToast();
   const { data: activeAdminCount } = useActiveAdminCount(editing && user?.role === 'admin' && user.is_active);
+  const { data: userDetails } = useUser(user?.id);
 
   const [fullName, setFullName] = useState(user?.full_name ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
@@ -33,12 +34,24 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
   const [err, setErr] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const { data: sites } = useAllSites();
+  const [siteSearch, setSiteSearch] = useState('');
+  const { data: sitesData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteSites(50, siteSearch);
   const [siteIds, setSiteIds] = useState<number[]>(user?.sites?.map(s => s.id) ?? []);
-  const siteOptions = useMemo(
-    () => (sites ?? []).map((s) => ({ id: s.id, name: s.name })),
-    [sites]
-  );
+  
+  const siteOptions = useMemo(() => {
+    return sitesData?.pages.flatMap((p) => p.data).map((s) => ({ id: s.id, name: s.name })) ?? [];
+  }, [sitesData]);
+
+  useEffect(() => {
+    if (userDetails) {
+      setFullName(userDetails.full_name ?? '');
+      setUsername(userDetails.username ?? '');
+      setEmail(userDetails.email ?? '');
+      setRole(userDetails.role ?? 'engineer');
+      setIsActive(userDetails.is_active ?? true);
+      setSiteIds(userDetails.sites?.map((s: { id: number }) => s.id) ?? []);
+    }
+  }, [userDetails]);
 
   // Password fields for creation
   const [password, setPassword] = useState('');
@@ -350,6 +363,10 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
                 onChange={(ids) => { setSiteIds(ids); setFieldErrors(prev => ({ ...prev, siteIds: '' })); }}
                 placeholder="Assign sites to user..."
                 openDirection="up"
+                onSearchChange={setSiteSearch}
+                onLoadMore={() => fetchNextPage()}
+                hasMore={hasNextPage}
+                isLoading={isFetchingNextPage}
               />
               {fieldErrors.siteIds && <p className="text-destructive text-xs mt-1">{fieldErrors.siteIds}</p>}
             </div>

@@ -12,7 +12,8 @@ import {
   useSites,
   useCreateSite,
   useUpdateSite,
-  useAllUsers,
+  useInfiniteUsers,
+  useSite,
   useAssignUserToSite,
   useRemoveUserFromSite,
   useDeleteSite,
@@ -30,7 +31,9 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const toast = useToast();
   const create = useCreateSite();
   const update = useUpdateSite();
-  const { data: allUsers } = useAllUsers();
+  const { data: siteDetails } = useSite(site?.id);
+  const [userSearch, setUserSearch] = useState('');
+  const { data: infiniteUsersData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteUsers(50, userSearch);
   const assignUser = useAssignUserToSite();
   const removeUser = useRemoveUserFromSite();
 
@@ -41,12 +44,19 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const [file, setFile] = useState<File | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    if (siteDetails) {
+      setName(siteDetails.name ?? '');
+      setLat(siteDetails.map_center_lat?.toString() ?? '');
+      setLng(siteDetails.map_center_lng?.toString() ?? '');
+      setZoom(siteDetails.default_zoom?.toString() ?? '14');
+    }
+  }, [siteDetails]);
+
   const initialUserIds = useMemo(() => {
-    if (!editing || !site || !allUsers) return [];
-    return allUsers
-      .filter((u) => u.sites.some((s) => s.id === site.id))
-      .map((u) => u.id);
-  }, [editing, site, allUsers]);
+    if (!editing || !siteDetails?.users) return [];
+    return siteDetails.users.map((u) => u.id);
+  }, [editing, siteDetails]);
 
   const [userIds, setUserIds] = useState<number[]>([]);
 
@@ -57,16 +67,28 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   }, [initialUserIds]);
 
   const userOptions = useMemo(() => {
-    if (!allUsers) return [];
-    // Admins have access to every site already, so they aren't assignable here.
-    // Also, don't show inactive users in the assignment dropdown.
-    return allUsers
-      .filter((u) => u.role !== 'admin' && u.is_active)
-      .map((u) => ({
+    const infiniteUsers = infiniteUsersData?.pages.flatMap((p) => p.data) ?? [];
+    
+    // Map infinite users to the same shape as assignedUsers
+    const mappedInfinite = infiniteUsers
+      .filter((u: any) => u.role !== 'admin' && u.is_active)
+      .map((u: any) => ({
         id: u.id,
         name: `${u.full_name || u.username} (${u.role.replace('_', ' ')})`,
       }));
-  }, [allUsers]);
+
+    const assignedUsers = siteDetails?.users ?? [];
+    
+    // Merge them and remove duplicates by ID
+    const merged = [...mappedInfinite];
+    for (const au of assignedUsers) {
+      if (!merged.some((m) => m.id === au.id)) {
+        merged.push(au);
+      }
+    }
+    
+    return merged;
+  }, [infiniteUsersData, siteDetails]);
 
   async function save() {
     const errors: Record<string, string> = {};
@@ -206,9 +228,13 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
               <MultiSelect
                 options={userOptions}
                 selectedIds={userIds}
-                onChange={setUserIds}
+                onChange={(ids) => setUserIds(ids)}
                 placeholder="Assign users to site..."
                 openDirection="up"
+                onSearchChange={setUserSearch}
+                onLoadMore={() => fetchNextPage()}
+                hasMore={hasNextPage}
+                isLoading={isFetchingNextPage}
               />
             </div>
           </div>

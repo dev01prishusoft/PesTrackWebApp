@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PesTrack — El Gouna Site Findings V6</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" href="/favicon.svg" />
+<link rel="mask-icon" href="/favicon.svg" color="#2d8a4e" />
+<link rel="apple-touch-icon" href="/favicon.svg" />
+<link rel="manifest" href="/manifest.json" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -163,7 +168,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="hbtn" id="btn-only-constr" onclick="toggleOnlyConstr()" title="Show only construction zones — hide findings">👁 Only Constr.</button>
     <button class="hbtn blue" id="btn-export" style="display:none" onclick="exportFindings()" title="Export all findings with photos — use this to back up and share">📤 Export JSON</button>
     <button class="hbtn blue" id="btn-import" style="display:none" onclick="triggerImport()" title="Import findings from a previously exported JSON">📥 Import JSON</button>
-    <button class="hbtn" style="background:#7C3AED;color:#fff;border-color:#7C3AED" onclick="openPdfSortModal()">📋 PDF Report</button>
+    <button class="hbtn" id="btn-pdf" style="display:none;background:#7C3AED;color:#fff;border-color:#7C3AED" onclick="openPdfSortModal()">📋 PDF Report</button>
     <button class="hbtn" id="btn-parcels" style="display:none;background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
     <input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importFindings(this)">
     <input type="file" id="parcel-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="importParcelsXlsx(this)">
@@ -1065,8 +1070,14 @@ function injectModals(){
       </select>
       <label>Parcel / Area</label>
       <select id="fi-parcel" style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid #D0D5DD;font-size:0.9rem;font-family:inherit"></select>
-      <label>GPS Coordinates <span style="font-weight:400;color:#94A3B8">(optional — paste from Google Maps)</span></label>
-      <input id="fi-coords" placeholder="e.g. 29.9612, 30.9874" autocomplete="off" style="font-family:monospace">
+      <label>GPS Coordinates <span style="font-weight:400;color:#94A3B8">(optional)</span></label>
+      <input id="fi-coords" placeholder="e.g. 29.9612, 30.9874" autocomplete="off" style="font-family:monospace;margin-bottom:4px;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button id="btn-capture-gps" type="button" onclick="captureGPS()" title="Get Current Location" style="background:none;border:none;color:#0F766E;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.8rem;padding:2px 4px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+          Capture GPS
+        </button>
+      </div>
       <label>Photos</label>
       <input type="file" id="fi-photo-in" multiple accept="image/*" style="display:none" onchange="handleFiPhotos(this)">
       <button class="sbbtn s" onclick="document.getElementById('fi-photo-in').click()" style="margin:0 0 5px">📷 Add Photos</button>
@@ -1441,6 +1452,36 @@ function setFiStat(stat, btn){
   if(btn) btn.classList.add('sel');
 }
 window.setFiStat = setFiStat;
+
+function captureGPS() {
+  const btn = document.getElementById('btn-capture-gps');
+  if (!navigator.geolocation) {
+    showNotif('❌ Geolocation is not supported by your browser', true, 5000);
+    return;
+  }
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4 12H2M22 12h-2"></path><circle cx="12" cy="12" r="6"></circle></svg> Fetching...`;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = parseFloat(pos.coords.latitude.toFixed(6));
+      const lng = parseFloat(pos.coords.longitude.toFixed(6));
+      document.getElementById('fi-coords').value = `${lat}, ${lng}`;
+      
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg> Captured!`;
+      setTimeout(() => btn.innerHTML = originalHTML, 3000);
+      
+      // Auto-set nearest parcel if available
+      const nearestP = window._nearestParcel ? window._nearestParcel(lat, lng) : null;
+      if (nearestP) setParcelDropdown(nearestP.name);
+    },
+    (err) => {
+      showNotif('❌ Failed to get location: ' + err.message, true, 5000);
+      btn.innerHTML = originalHTML;
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+window.captureGPS = captureGPS;
 
 function closeFiModal(){
   document.getElementById('m-fi').style.display = 'none';
@@ -2171,7 +2212,8 @@ function buildPopup(loc){
       <div class="fi-tl-date">${v.date} — ${vc.label}</div>
       <span class="fi-tl-status" style="background:${vs.color}">${vs.emoji} ${vs.label}</span>
       ${actionButtons}
-      ${v.notes ? `<div class="fi-tl-note">${v.notes}</div>` : ''}
+      <div class="fi-tl-note">Visited by: ${v.engineerName}</div>
+      ${v.notes ? `<div class="fi-tl-note" style="max-height: 120px; overflow-y: auto; padding-right: 4px;">${v.notes}</div>` : ''}
       ${v.escalated ? `<div class="fi-tl-note" style="color:#7C3AED;font-weight:600">➜ ${v.escalated}</div>` : ''}
       ${photosHTML ? `<div class="fi-tl-photos">${photosHTML}</div>` : ''}
     </div>`;
@@ -2307,7 +2349,10 @@ function mapApiFinding(f){
         label: v.label || '',
         notes: v.notes || '',
         escalated: escalationIdToLabel[v.escalatedToId] || '',
+        createdByName: v.createdByName || 'Unknown',
         createdById: v.createdById || null,
+        engineerName: v.engineerName || 'Unknown',
+        engineerId: v.engineerId || null,
         updatedAt: v.updatedAt || null,
         photos: v.photos || []
       };
@@ -2398,15 +2443,15 @@ function handleUnauthorized() {
 
 function logout() {
   const token = localStorage.getItem('pt_token');
-  fetch('/api/auth/logout', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token }
-  })
-  .finally(() => {
-    handleUnauthorized();
-    // Return to the PesTrack login screen (this page), not the admin panel.
-    window.location.assign('/PesTrack.html');
-  });
+  if (token) {
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).catch(() => {}); // Fire and forget
+  }
+  handleUnauthorized();
+  // Return to the PesTrack login screen (this page), not the admin panel.
+  window.location.assign('/PesTrack.html');
 }
 window.logout = logout;
 
@@ -2631,6 +2676,7 @@ function applyPermissions(role) {
   const btnExport = document.getElementById('btn-export');
   const btnImport = document.getElementById('btn-import');
   const btnUpdateParcels = document.getElementById('btn-parcels');
+  const btnPdf = document.getElementById('btn-pdf');
 
   // Header profile menu: shows who's signed in and their role (so a client
   // viewer understands why edit controls are hidden) plus the logout action.
@@ -2662,18 +2708,21 @@ function applyPermissions(role) {
     if (btnExport) btnExport.style.display = 'none';
     if (btnImport) btnImport.style.display = 'none';
     if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
+    if (btnPdf) btnPdf.style.display = '';
   } else if (role === 'engineer') {
     if (btnFi) btnFi.style.display = '';
-    if (btnCz) btnCz.style.display = '';
+    if (btnCz) btnCz.style.display = 'none';
     if (btnExport) btnExport.style.display = 'none';
     if (btnImport) btnImport.style.display = 'none';
-    if (btnUpdateParcels) btnUpdateParcels.style.display = '';
+    if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
+    if (btnPdf) btnPdf.style.display = 'none';
   } else if (role === 'admin') {
     if (btnFi) btnFi.style.display = '';
     if (btnCz) btnCz.style.display = '';
     if (btnExport) btnExport.style.display = '';
     if (btnImport) btnImport.style.display = '';
     if (btnUpdateParcels) btnUpdateParcels.style.display = '';
+    if (btnPdf) btnPdf.style.display = '';
   }
 }
 
@@ -2993,7 +3042,10 @@ async function exportFindingsPDF(sortBy='number'){
     const STAT_LABELS = {open:'1st Offense', repeat:'Repeat', resolved:'Resolved'};
     // Built from the dashboard's CATS so PDF labels always match exactly
     const CAT_LABELS = Object.fromEntries((window._CATS||[]).map(c=>[c.id, c.label]));
-    const CLIENT = (window._CLIENT_CONFIG&&window._CLIENT_CONFIG.name)||'El Gouna';
+    const siteSelect = document.getElementById('site-selector');
+    const CLIENT = siteSelect && siteSelect.options.length > 0 
+      ? siteSelect.options[siteSelect.selectedIndex]?.text 
+      : 'PesTrack';
 
     function hexToRgb(h){
       h=h.replace('#','');
@@ -4163,7 +4215,7 @@ async function exportFindingsPDF(sortBy='number'){
 
     const date = new Date().toISOString().slice(0,10);
     const cid = (window._CLIENT_CONFIG&&window._CLIENT_CONFIG.id)||'ElGouna';
-    pdf.save(`PesTrack Pest Pressure Sources - El Gouna ${date}.pdf`);
+    pdf.save(`PesTrack Pest Pressure Sources - ${CLIENT} ${date}.pdf`);
     showNotif('✅ Report saved');
   }catch(err){
     console.error('PDF error:',err);

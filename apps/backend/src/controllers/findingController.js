@@ -52,8 +52,10 @@ async function shapeFindings(locRows, visitRows, photoRows) {
       notes: v.notes || '',
       escalatedToId: v.escalated_to_id,
       statusId: v.status_id,
-      createdBy: v.created_by_name || v.created_by_username || 'Unknown',
+      createdByName: v.created_by_name || v.created_by_username || 'Unknown',
       createdById: v.created_by, // used by the client to gate edit/delete buttons
+      engineerName: v.engineer_name || v.engineer_username || 'Unknown',
+      engineerId: v.engineer_id,
       updatedAt: v.updated_at,   // last-modified time, shown to the client
       photos: await presignKeys(photosByVisit.get(v.id) || []),
     };
@@ -162,9 +164,12 @@ async function listFindings(req, res, next) {
     const visitWhere = 'v.location_id = ANY($1::uuid[])';
 
     const { rows: visitRows } = await query(
-      `SELECT v.*, u.full_name as created_by_name, u.username as created_by_username
+      `SELECT v.*, 
+       uc.full_name as created_by_name, uc.username as created_by_username,
+       ue.full_name as engineer_name, ue.username as engineer_username
        FROM visits v
-       LEFT JOIN users u ON v.created_by = u.id
+       LEFT JOIN users uc ON v.created_by = uc.id
+       LEFT JOIN users ue ON v.engineer_id = ue.id
        WHERE ${visitWhere} ORDER BY v.visit_date DESC, v.created_at DESC`,
       visitParams
     );
@@ -204,9 +209,12 @@ async function getFinding(req, res, next) {
     if (!locRows.length) return res.status(404).json({ error: DELETED_MESSAGE, code: 'DELETED' });
 
     const { rows: visitRows } = await query(
-      `SELECT v.*, u.full_name as created_by_name, u.username as created_by_username
+      `SELECT v.*, 
+       uc.full_name as created_by_name, uc.username as created_by_username,
+       ue.full_name as engineer_name, ue.username as engineer_username
          FROM visits v
-         LEFT JOIN users u ON v.created_by = u.id
+         LEFT JOIN users uc ON v.created_by = uc.id
+       LEFT JOIN users ue ON v.engineer_id = ue.id
         WHERE v.location_id = $1
         ORDER BY v.visit_date DESC, v.created_at DESC`,
       [locRows[0].id]
@@ -259,8 +267,8 @@ async function createFinding(req, res, next) {
       );
       const location = locResult[0];
       const { rows: visitResult } = await client.query(
-        `INSERT INTO visits (location_id, visit_date, category_id, label, notes, escalated_to_id, status_id, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        `INSERT INTO visits (location_id, visit_date, category_id, label, notes, escalated_to_id, status_id, created_by, engineer_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
         [
           location.id,
           visit.visitDate,
@@ -270,6 +278,7 @@ async function createFinding(req, res, next) {
           visit.escalatedToId || null,
           visit.statusId,
           req.user.id,
+          req.body.engineerId || req.user.id,
         ]
       );
       await setVisitPhotos(client, visitResult[0].id, photos, req.user.id);
@@ -328,8 +337,8 @@ async function addVisit(req, res, next) {
     let updatedLoc = null;
     const newVisit = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        `INSERT INTO visits (location_id, visit_date, category_id, label, notes, escalated_to_id, status_id, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        `INSERT INTO visits (location_id, visit_date, category_id, label, notes, escalated_to_id, status_id, created_by, engineer_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
         [
           location.id,
           visit.visitDate,
@@ -339,6 +348,7 @@ async function addVisit(req, res, next) {
           visit.escalatedToId || null,
           visit.statusId,
           req.user.id,
+          req.body.engineerId || req.user.id,
         ]
       );
       await setVisitPhotos(client, rows[0].id, photos, req.user.id);
@@ -430,8 +440,8 @@ async function editVisit(req, res, next) {
       oldPhotos = oldPhotoRows.map(r => r.photo_url);
 
       const { rows } = await client.query(
-        `UPDATE visits SET visit_date=$1, category_id=$2, label=$3, notes=$4, escalated_to_id=$5, status_id=$6, updated_at=NOW()
-         WHERE id=$7 AND location_id=$8 RETURNING *`,
+        `UPDATE visits SET visit_date=$1, category_id=$2, label=$3, notes=$4, escalated_to_id=$5, status_id=$6, engineer_id=$7, updated_at=NOW()
+         WHERE id=$8 AND location_id=$9 RETURNING *`,
         [
           visit.visitDate,
           visit.categoryId,
@@ -439,6 +449,7 @@ async function editVisit(req, res, next) {
           visit.notes || null,
           visit.escalatedToId || null,
           visit.statusId,
+          req.body.engineerId || req.user.id,
           req.params.visitId,
           location.id,
         ]

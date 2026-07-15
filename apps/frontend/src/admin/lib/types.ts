@@ -38,6 +38,7 @@ export interface Site {
   default_zoom: number | null;
   status: string;
   created_at: string;
+  users?: { id: number; name: string }[];
 }
 
 export interface AuditLog {
