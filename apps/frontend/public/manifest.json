@@ -1,6 +1,6 @@
 {
-  "name": "PesTrack Admin",
-  "short_name": "PesTrack Admin",
+  "name": "PesTrack",
+  "short_name": "PesTrack",
   "description": "PesTrack Web Application",
   "start_url": "/",
   "display": "standalone",

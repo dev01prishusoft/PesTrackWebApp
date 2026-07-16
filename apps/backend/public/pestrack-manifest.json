@@ -1,6 +1,6 @@
 {
-  "name": "PesTrack",
-  "short_name": "PesTrack",
+  "name": "PesTrack Map",
+  "short_name": "PesTrack Map",
   "description": "PesTrack Web Application",
   "id": "/PesTrack.html",
   "start_url": "/PesTrack.html",
