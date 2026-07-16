@@ -3079,10 +3079,89 @@ async function exportFindingsPDF(sortBy='number'){
     }
     function pdfText(str){
       if(!str) return '';
-      return str.replace(/[\u{1F300}-\u{1FFFF}\u{2600}-\u{27BF}]/gu,'')
-                .replace(/[^\x00-\xFF]/g,'').trim();
+      // Remove only emojis and special symbols, but keep Arabic and other languages
+      return str.replace(/[\u{1F300}-\u{1FFFF}\u{2600}-\u{27BF}]/gu,'').trim();
     }
+
+    // ── Detect if text contains Arabic characters ──
+    function hasArabic(text){
+      if(!text) return false;
+      return /[؀-ۿݐ-ݿ]/.test(text);
+    }
+
+    // ── Load & register an Arabic-capable font (Noto Naskh Arabic) ──
+    // jsPDF's built-in fonts (helvetica etc.) have NO Arabic glyphs, which
+    // is why Arabic renders garbled. We fetch a real TTF once and embed it.
+    let arabicFontReady = false;
+    async function loadArabicFont(){
+      if(arabicFontReady) return true;
+      try{
+        const url = 'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf';
+        const resp = await fetch(url);
+        if(!resp.ok) throw new Error('Font fetch failed: '+resp.status);
+        const buf = await resp.arrayBuffer();
+        // Convert ArrayBuffer → base64 in chunks (avoids call-stack limits)
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        const CHUNK = 0x8000;
+        for(let i=0; i<bytes.length; i+=CHUNK){
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i+CHUNK));
+        }
+        const b64 = btoa(binary);
+        pdf.addFileToVFS('NotoNaskhArabic-Regular.ttf', b64);
+        pdf.addFont('NotoNaskhArabic-Regular.ttf', 'NotoNaskhArabic', 'normal');
+        arabicFontReady = true;
+        return true;
+      }catch(e){
+        console.warn('Arabic font load failed — Arabic text may not render:', e);
+        return false;
+      }
+    }
+
+    // ── Set appropriate font based on text content ──
+    function setFontForText(text, fontSize, weight='normal'){
+      if(hasArabic(text) && arabicFontReady){
+        // Embedded font has one weight; jsPDF handles Arabic letter shaping
+        pdf.setFont('NotoNaskhArabic', 'normal');
+      } else {
+        pdf.setFont('helvetica', weight);
+      }
+      pdf.setFontSize(fontSize);
+    }
+
+    // ── Render Arabic/mixed-language text via the browser into an image ──
+    // jsPDF's bidi handling drops/mangles Latin text mixed with Arabic.
+    // Browsers do bidi perfectly, so we render such notes in a hidden div
+    // and snapshot it with html2canvas (already loaded for the map pages).
+    async function renderNotesImage(text, widthMM){
+      try{
+        const pxPerMM = 6;
+        const wPx = Math.round(widthMM * pxPerMM);
+        const div = document.createElement('div');
+        div.setAttribute('dir','auto');
+        div.style.cssText = 'position:fixed;left:-99999px;top:0;background:#ffffff;color:rgb(80,90,100);'
+          + `width:${wPx}px;font-family:Arial,Tahoma,sans-serif;font-size:${Math.round(2.1*pxPerMM)}px;line-height:1.5;`
+          + 'unicode-bidi:plaintext;white-space:pre-wrap;word-wrap:break-word;padding:0;margin:0;';
+        div.textContent = text;
+        document.body.appendChild(div);
+        const canvas = await html2canvas(div, {scale:2, backgroundColor:'#ffffff', logging:false});
+        document.body.removeChild(div);
+        const hMM = (canvas.height / canvas.width) * widthMM;
+        return {data: canvas.toDataURL('image/png'), wMM: widthMM, hMM};
+      }catch(e){ console.warn('Notes image render failed, falling back to font:', e); return null; }
+    }
+
     function stripZeros(ref){ return ref ? String(parseInt(ref,10)||ref) : '?'; }
+
+    // ── Preload Arabic font only if any finding text needs it ──
+    const anyArabic = (window._ptFindings||[]).some(loc =>
+      hasArabic(loc.label) ||
+      (loc.visits||[]).some(v => hasArabic(v.notes) || hasArabic(v.escalated) || hasArabic(v.label))
+    );
+    if(anyArabic){
+      showNotif('⏳ Loading Arabic font…', false, 0);
+      await loadArabicFont();
+    }
 
     showNotif('⏳ Step 1/4: Loading logo…', false, 0);
     const logoCanvas = document.createElement('canvas');
@@ -3705,17 +3784,19 @@ async function exportFindingsPDF(sortBy='number'){
       pdf.setFillColor(...statColor);
       pdf.rect(ML, y, CW, 7, 'F');
       pdf.setTextColor(255,255,255);
-      pdf.setFontSize(8); pdf.setFont('helvetica','bold');
       const bandParts = [`#${stripZeros(loc.refNum||'?')}`];
       if(loc.parcel) bandParts.push(pdfText(loc.parcel));
       if(latest.label) bandParts.push(pdfText(latest.label));
-      pdf.text(bandParts.join('  ·  '), ML+3, y+5);
+      const bandTxt = bandParts.join('  ·  ');
+      setFontForText(bandTxt, 8, 'bold');
+      pdf.text(bandTxt, ML+3, y+5);
       y += 8;
 
       // Summary line — status/visits/category/coords, all one row, one font
       pdf.setFillColor(245,247,250); pdf.rect(ML, y, CW, 7, 'F');
-      pdf.setTextColor(60,70,90); pdf.setFontSize(6.5); pdf.setFont('helvetica','normal');
+      pdf.setTextColor(60,70,90);
       const sumTxt = `${STAT_LABELS[latest.status]||'Open'}  |  ${totalVisits} visit${totalVisits>1?'s':''}  |  ${repeats} repeat${repeats!==1?'s':''}  |  CAT: ${pdfText(catLabel)}  |  Coords: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
+      setFontForText(sumTxt, 6.5, 'normal');
       pdf.text(sumTxt, ML+3, y+4.5);
       y += 9;
 
@@ -3732,16 +3813,20 @@ async function exportFindingsPDF(sortBy='number'){
         pdf.setFillColor(...vColor); pdf.rect(ML+3, y, 2, 6, 'F');
         pdf.setTextColor(40,50,70); pdf.setFontSize(6.5); pdf.setFont('helvetica','bold');
         pdf.text(visit.date, ML+7, y+4.2);
-        pdf.setFont('helvetica','normal');
-        pdf.text(`${STAT_LABELS[visit.status]||''}  ·  ${pdfText(vCat)}`, ML+30, y+4.2);
+        const catText = pdfText(vCat);
+        setFontForText(catText, 6.5, 'normal');
+        pdf.text(`${STAT_LABELS[visit.status]||''}  ·  ${catText}`, ML+30, y+4.2);
         y += 7;
 
         // Assigned / Escalated To — always printed
-        pdf.setFontSize(6); pdf.setFont('helvetica','normal');
+        pdf.setFontSize(6);
         if(visit.escalated){
           pdf.setTextColor(90,50,160);
-          pdf.text(`Assigned / Escalated to: ${pdfText(visit.escalated)}`, ML+6, y+3);
+          const escalatedText = pdfText(visit.escalated);
+          setFontForText(escalatedText, 6, 'normal');
+          pdf.text(`Assigned / Escalated to: ${escalatedText}`, ML+6, y+3);
         } else {
+          pdf.setFont('helvetica','normal');
           pdf.setTextColor(170,175,185);
           pdf.text('Assigned / Escalated to: —', ML+6, y+3);
         }
@@ -3749,10 +3834,30 @@ async function exportFindingsPDF(sortBy='number'){
         y += 4;
 
         if(visit.notes){
-          const lines = pdf.splitTextToSize(pdfText(visit.notes), CW-12);
-          pdf.setFontSize(6); pdf.setTextColor(80,90,100);
-          lines.forEach(l=>{ ensurePage(4); pdf.text(l, ML+6, y+3); y+=3.5; });
-          y += 1;
+          const cleanNotes = pdfText(visit.notes);
+          if(hasArabic(cleanNotes)){
+            // Arabic or mixed text: browser renders bidi perfectly → embed as image
+            const img = await renderNotesImage(cleanNotes, CW-12);
+            if(img){
+              ensurePage(Math.min(img.hMM, 240) + 2);
+              pdf.addImage(img.data, 'PNG', ML+6, y+1, img.wMM, img.hMM);
+              y += img.hMM + 2;
+            } else {
+              // Fallback: embedded Arabic font (pure Arabic renders fine)
+              setFontForText(cleanNotes, 6, 'normal');
+              const lines = pdf.splitTextToSize(cleanNotes, CW-12);
+              pdf.setTextColor(80,90,100);
+              lines.forEach(l=>{ ensurePage(4.5); pdf.text(l, ML+CW-6, y+3, {align:'right'}); y+=4; });
+              y += 1;
+            }
+          } else {
+            // English-only: original text path, unchanged
+            pdf.setFont('helvetica','normal'); pdf.setFontSize(6);
+            const lines = pdf.splitTextToSize(cleanNotes, CW-12);
+            pdf.setTextColor(80,90,100);
+            lines.forEach(l=>{ ensurePage(4); pdf.text(l, ML+6, y+3); y+=3.5; });
+            y += 1;
+          }
         }
 
         if(photoCount>0){
@@ -3895,8 +4000,10 @@ async function exportFindingsPDF(sortBy='number'){
             pdf.setFillColor(...c); pdf.rect(ML+2, y+0.8, 3, 3, 'F');
           }
           const tx = r.color ? ML+7 : ML+2;
-          pdf.setTextColor(40,50,70); pdf.setFontSize(8); pdf.setFont('helvetica','normal');
-          pdf.text(pdfText(String(r.label)), tx, y+4);
+          pdf.setTextColor(40,50,70);
+          const rLabel = pdfText(String(r.label));
+          setFontForText(rLabel, 8, 'normal');
+          pdf.text(rLabel, tx, y+4);
           // bar
           const bw = (r.count/maxCount)*barMax;
           const bc = r.color ? hexToRgb(r.color) : [148,163,184];
@@ -4169,8 +4276,12 @@ async function exportFindingsPDF(sortBy='number'){
           const colW = cols[vi].w;
           // Right-align numeric columns (repeats, days)
           const rightAlign = vi === 6 || vi === 9;
-          const txt = pdf.splitTextToSize(pdfText(val), colW - 3)[0] || '';
-          if(rightAlign){
+          const cleanVal = pdfText(val);
+          // Arabic cells need the embedded font, otherwise they render as garbage
+          setFontForText(cleanVal, FONT_SZ, 'normal');
+          const txt = pdf.splitTextToSize(cleanVal, colW - 3)[0] || '';
+          if(rightAlign || hasArabic(cleanVal)){
+            // Arabic reads right-to-left, so right-align its cells too
             pdf.text(txt, cx + colW - 2, yy + ROW_H - 1.4, {align:'right'});
           } else {
             pdf.text(txt, cx + 1.8, yy + ROW_H - 1.4);
