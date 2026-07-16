@@ -41,8 +41,10 @@ router.delete(`/findings/${LOC_ID}/visits/:visitId`, canWrite, siteAccess, ctrl.
 router.delete(`/findings/${LOC_ID}`, canWrite, siteAccess, ctrl.deleteFinding);
 
 // --- construction zones ---
+// Only admins may add or remove construction zones. Engineers (and client_viewers)
+// are read-only here so they cannot alter zones the admin placed.
 router.get('/zones', siteAccess, ctrl.listZones);
-router.post('/zones', canWrite, siteAccess, ctrl.createZone);
-router.delete('/zones/:id', canWrite, siteAccess, ctrl.deleteZone);
+router.post('/zones', requireAdmin, siteAccess, ctrl.createZone);
+router.delete('/zones/:id', requireAdmin, siteAccess, ctrl.deleteZone);
 
 module.exports = router;

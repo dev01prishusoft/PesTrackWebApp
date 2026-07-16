@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError, type FieldErrors } from '../lib/api';
 
@@ -62,9 +62,20 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm bg-card border border-border rounded-2xl shadow-md p-8">
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-md p-8">
         <div className="flex flex-col items-center mb-6">
           <img src={`${import.meta.env.BASE_URL}sotaico-logo.png`} alt="SOTAICO PesTrack" className="h-12 w-auto" />
+          {isAdminLogin && (
+            <>
+              <div className="mt-4 flex w-full items-center gap-2">
+                <span className="h-px flex-1 bg-border" />
+                <span className="h-2 w-2 rounded-full bg-primary" />
+                <h1 className="text-lg font-semibold text-foreground whitespace-nowrap">Admin Panel Login</h1>
+                <span className="h-2 w-2 rounded-full bg-primary" />
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
         </div>
         {err && <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm mb-3">{err}</div>}
         <label className="block text-xs font-medium text-muted-foreground mb-1">Username or email</label>
@@ -105,6 +116,12 @@ export function LoginPage() {
         >
           {busy ? 'Logging in…' : 'Log in'}
         </button>
+        {isAdminLogin && (
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck size={14} className="text-primary" />
+            This is a restricted area. Authorized administrators only.
+          </p>
+        )}
       </div>
     </div>
   );
