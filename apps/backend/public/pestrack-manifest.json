@@ -1,0 +1,25 @@
+{
+  "name": "PesTrack Map",
+  "short_name": "PesTrack Map",
+  "description": "PesTrack Web Application",
+  "id": "/PesTrack.html",
+  "start_url": "/PesTrack.html",
+  "scope": "/PesTrack.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2d8a4e",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
