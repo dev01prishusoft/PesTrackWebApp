@@ -266,7 +266,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 
 export function SitesPage() {
   const ls = useListState({ sort: 'created_at', order: 'desc' });
-  const { data, isLoading, isFetching, isError, error } = useSites(ls.params);
+  const { data, isFetching, isError, error } = useSites(ls.params);
   const deleteSite = useDeleteSite();
   const confirm = useAdminConfirm();
   const toast = useToast();

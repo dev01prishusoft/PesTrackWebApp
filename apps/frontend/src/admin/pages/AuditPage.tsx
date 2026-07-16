@@ -40,7 +40,7 @@ export function AuditPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [payloadRow, setPayloadRow] = useState<AuditLog | null>(null);
-  const { data, isLoading, isFetching, isError, error } = useAudit({
+  const { data, isFetching, isError, error } = useAudit({
     ...ls.params,
     action: action || undefined,
     from: from || undefined,

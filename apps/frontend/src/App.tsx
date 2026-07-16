@@ -9,7 +9,6 @@ import { AdminLayout } from './admin/AdminLayout';
 import { UsersPage } from './admin/pages/UsersPage';
 import { SitesPage } from './admin/pages/SitesPage';
 import { AuditPage } from './admin/pages/AuditPage';
-import { Loader2 } from 'lucide-react';
 import { LoginPage } from './pages/LoginPage';
 
 const queryClient = new QueryClient({
