@@ -32,6 +32,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023)
+  useEffect(() => {
+    if (!user) return;
+    const INACTIVITY_MS = 60 * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        logout();
+      }, INACTIVITY_MS);
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timer);
+      events.forEach((evt) => window.removeEventListener(evt, resetTimer));
+    };
+  }, [user]);
+
   async function login(usernameOrEmail: string, password: string, requireAdmin = false) {
     const d = await api<{ token: string; user: AuthUser }>('/api/auth/login', {
       method: 'POST',

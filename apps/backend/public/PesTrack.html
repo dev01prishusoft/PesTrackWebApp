@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SOTAICO PesTrack – Site Findings</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="alternate icon" href="/favicon.svg" />
+<link rel="icon" type="image/png" href="/pwa-192x192.png">
+<link rel="alternate icon" href="/favicon.svg">
 <link rel="mask-icon" href="/favicon.svg" color="#2d8a4e" />
 <link rel="apple-touch-icon" href="/pwa-192x192.png" />
 <link rel="manifest" href="/pestrack-manifest.json" />
@@ -1492,8 +1493,9 @@ function captureGPS() {
       const lng = parseFloat(pos.coords.longitude.toFixed(6));
       document.getElementById('fi-coords').value = `${lat}, ${lng}`;
       
-      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg> Captured!`;
-      setTimeout(() => btn.innerHTML = originalHTML, 3000);
+      const acc = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : '';
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg> Captured${acc}!`;
+      setTimeout(() => btn.innerHTML = originalHTML, 4000);
       
       // Auto-set nearest parcel if available
       const nearestP = window._nearestParcel ? window._nearestParcel(lat, lng) : null;
@@ -1503,7 +1505,7 @@ function captureGPS() {
       showNotif('❌ Failed to get location: ' + err.message, true, 5000);
       btn.innerHTML = originalHTML;
     },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 }
 window.captureGPS = captureGPS;
@@ -2479,6 +2481,28 @@ function logout() {
   window.location.assign('/PesTrack.html');
 }
 window.logout = logout;
+
+// ── 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
+const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
+let inactivityTimer = null;
+
+function resetInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  const token = localStorage.getItem('pt_token');
+  if (!token) return;
+
+  inactivityTimer = setTimeout(() => {
+    showNotif('⚠️ Session expired due to 60 minutes of inactivity. Logging out...', true, 5000);
+    setTimeout(() => {
+      logout();
+    }, 1500);
+  }, INACTIVITY_TIMEOUT_MS);
+}
+
+['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach((evt) => {
+  window.addEventListener(evt, resetInactivityTimer, { passive: true });
+});
+resetInactivityTimer();
 
 function togglePassword() {
   const input = document.getElementById('password');
