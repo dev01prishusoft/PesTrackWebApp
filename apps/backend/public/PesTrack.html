@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PesTrack — El Gouna Site Findings V6</title>
+<title>SOTAICO PesTrack – Site Findings</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="alternate icon" href="/favicon.svg" />
 <link rel="mask-icon" href="/favicon.svg" color="#2d8a4e" />
@@ -215,7 +215,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <input type="radio" name="pdf-sort" value="category" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
         <div style="display:flex;flex-direction:column;gap:1px">
           <strong>By Category</strong>
-          <span style="color:#94A3B8;font-size:.75rem">(grouped by pest type)</span>
+          <span style="color:#94A3B8;font-size:.75rem">(grouped by source type)</span>
         </div>
       </label>
       <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:4px 0;text-transform:none;text-align:left;">
@@ -664,7 +664,7 @@ let CATS = [
   {id:'stp_trench',    label:'STP / Trenches',     color:'#1D4ED8'},
   {id:'organic',       label:'Exposed Waste',       color:'#78350F'},
   {id:'structural',    label:'Dysfunctional Swim Pool',          color:'#6B7280'},
-  {id:'housekeeping',  label:'Structural',        color:'#7C3AED'},
+  {id:'housekeeping',  label:'Standing water - Other',        color:'#7C3AED'},
   {id:'irrigation',    label:'Landscape/Irrigation',color:'#15803D'},
   {id:'construction',  label:'Construction Debris', color:'#92400E'},
   {id:'mep',           label:'Drains & Manholes',      color:'#0E7490'},
@@ -1361,7 +1361,8 @@ function addVisitToLocation(locId){
   const _prevLbl = loc && loc.visits[0] ? loc.visits[0].label : '';
   document.getElementById('fi-lbl').value = _prevLbl;
   document.getElementById('fi-notes').value = '';
-  document.getElementById('fi-escalated').value = '';
+  const _prevEsc = (loc && loc.visits && loc.visits[0] && loc.visits[0].escalated) ? loc.visits[0].escalated : '';
+  document.getElementById('fi-escalated').value = _prevEsc;
   document.getElementById('fi-date').value = new Date().toISOString().slice(0,10);
   // Set parcel dropdown — inherit from finding or auto-detect from its GPS
   if(loc && loc.parcel) {
@@ -2238,7 +2239,7 @@ function buildPopup(loc){
       <div class="fi-tl-date">${v.date} — ${vc.label}</div>
       <span class="fi-tl-status" style="background:${vs.color}">${vs.emoji} ${vs.label}</span>
       ${actionButtons}
-      <div class="fi-tl-note">Visited by: ${v.engineerName}</div>
+      <div class="fi-tl-note">Logged by: ${v.engineerName}</div>
       ${v.notes ? `<div class="fi-tl-note" style="max-height: 120px; overflow-y: auto; padding-right: 4px;">${v.notes}</div>` : ''}
       ${v.escalated ? `<div class="fi-tl-note" style="color:#7C3AED;font-weight:600">➜ ${v.escalated}</div>` : ''}
       ${photosHTML ? `<div class="fi-tl-photos">${photosHTML}</div>` : ''}

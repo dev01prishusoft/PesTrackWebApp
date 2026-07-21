@@ -36,7 +36,7 @@ const CATEGORIES = [
   ['STP / Trenches', '#1D4ED8', 1],
   ['Exposed Waste', '#78350F', 2],
   ['Dysfunctional Swim Pool', '#6B7280', 3],
-  ['Structural', '#7C3AED', 4],
+  ['Standing water - Other', '#7C3AED', 4],
   ['Landscape/Irrigation', '#15803D', 5],
   ['Construction Debris', '#92400E', 6],
   ['Drains & Manholes', '#0E7490', 7],
