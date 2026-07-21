@@ -397,9 +397,7 @@ function importFindings(input){
   if(!file) return;
 
   if (!window._PARCELS || window._PARCELS.length === 0) {
-    if (!confirm("⚠️ No parcels loaded. Upload Parcel XLSX first, then import JSON.")) {
-      return;
-    }
+    showNotif('⚠️ No parcels loaded. Upload Parcel XLSX first, then import JSON.', false, 5000);
   }
 
   const reader = new FileReader();

@@ -58,8 +58,24 @@ async function getSite(req, res, next) {
     const { id } = req.params;
     const { rows } = await query(`
       SELECT s.*, 
-             COALESCE(json_agg(json_build_object('id', u.id, 'name', COALESCE(u.full_name, u.username)))
-                      FILTER (WHERE u.id IS NOT NULL), '[]') AS users
+             COALESCE(json_agg(DISTINCT jsonb_build_object('id', u.id, 'name', COALESCE(u.full_name, u.username)))
+                      FILTER (WHERE u.id IS NOT NULL), '[]') AS users,
+             (SELECT COUNT(DISTINCT parcel_name)::int FROM parcels WHERE site_id = s.id) AS parcel_count,
+             COALESCE((
+               SELECT json_agg(json_build_object(
+                        'parcel_name', p.parcel_name,
+                        'quadrant', p.quadrant,
+                        'points', p.points
+                      ))
+               FROM (
+                 SELECT parcel_name, quadrant, COUNT(*)::int AS points
+                 FROM parcels
+                 WHERE site_id = s.id
+                 GROUP BY parcel_name, quadrant
+                 ORDER BY quadrant ASC, parcel_name ASC
+                 LIMIT 200
+               ) p
+             ), '[]') AS parcels
       FROM sites s
       LEFT JOIN user_sites us ON us.site_id = s.id
       LEFT JOIN users u ON u.id = us.user_id

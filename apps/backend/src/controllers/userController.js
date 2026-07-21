@@ -8,7 +8,6 @@ const {
 } = require('../utils/validate');
 
 const VALID_ROLES = ['admin', 'engineer', 'client_viewer'];
-const USER_SORT_COLS = ['u.full_name', 'u.username', 'u.email', 'u.role', 'u.is_active', 'u.created_at', 'u.last_login'];
 const MIN_ACTIVE_ADMINS = 2;
 const ADMIN_DEACTIVATION_ERROR =
   'At least 2 active admins are required. Promote another user to admin before deactivating this account.';
@@ -70,6 +69,8 @@ function conflictMessage(conflicts) {
   return `This ${list} ${verb} already in use.`;
 }
 
+const USER_SORT_COLS = ['u.full_name', 'u.username', 'u.email', 'u.role', 'u.is_active', 'u.created_at', 'u.last_login', 'sites'];
+
 // Shared SELECT that includes assigned site ids + names.
 const USER_SELECT = `
   SELECT u.id, u.username, u.email, u.full_name, u.role, u.is_active,
@@ -84,7 +85,12 @@ const USER_SELECT = `
 async function listUsers(req, res, next) {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const { orderBy } = parseSort(req.query, USER_SORT_COLS, 'u.id');
+    let sortCol = USER_SORT_COLS.includes(req.query.sort) ? req.query.sort : 'u.id';
+    if (sortCol === 'sites') {
+      sortCol = `CASE WHEN u.role = 'admin' THEN 'All sites' ELSE COALESCE(STRING_AGG(s.name, ', '), '—') END`;
+    }
+    const dir = String(req.query.order).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    const orderBy = `${sortCol} ${dir}`;
 
     // Optional filters: search (name/username/email), role, isActive.
     const conditions = [];

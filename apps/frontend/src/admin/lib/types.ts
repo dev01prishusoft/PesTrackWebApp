@@ -29,6 +29,12 @@ export interface User {
   sites: SiteRef[];
 }
 
+export interface SiteParcelSummary {
+  parcel_name: string;
+  quadrant: string;
+  points: number;
+}
+
 export interface Site {
   id: number;
   name: string;
@@ -39,6 +45,8 @@ export interface Site {
   status: string;
   created_at: string;
   users?: { id: number; name: string }[];
+  parcel_count?: number;
+  parcels?: SiteParcelSummary[];
 }
 
 export interface AuditLog {

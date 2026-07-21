@@ -36,6 +36,7 @@ export function useCreateUser() {
       api('/api/users', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin_users'] });
+      qc.invalidateQueries({ queryKey: ['admin_sites'] });
     },
   });
 }
@@ -47,6 +48,7 @@ export function useUpdateUser() {
       api(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin_users'] });
+      qc.invalidateQueries({ queryKey: ['admin_sites'] });
     },
   });
 }
@@ -57,6 +59,7 @@ export function useDeactivateUser() {
     mutationFn: (id: number) => api(`/api/users/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin_users'] });
+      qc.invalidateQueries({ queryKey: ['admin_sites'] });
     },
   });
 }
@@ -145,20 +148,30 @@ export function useInfiniteUsers(limit: number = 50, search: string = '') {
 }
 
 export function useAssignUserToSite() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ siteId, userId }: { siteId: number; userId: number }) =>
       api(`/api/sites/${siteId}/users`, {
         method: 'POST',
         body: JSON.stringify({ userId }),
       }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin_sites'] });
+      qc.invalidateQueries({ queryKey: ['admin_users'] });
+    },
   });
 }
 
 export function useRemoveUserFromSite() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ siteId, userId }: { siteId: number; userId: number }) =>
       api(`/api/sites/${siteId}/users/${userId}`, {
         method: 'DELETE',
       }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin_sites'] });
+      qc.invalidateQueries({ queryKey: ['admin_users'] });
+    },
   });
 }

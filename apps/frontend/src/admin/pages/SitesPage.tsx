@@ -231,8 +231,20 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
                 type="file"
                 accept=".xlsx"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80 cursor-pointer border border-input rounded-lg bg-card py-1 px-2"
               />
+              {editing && (
+                <div className="mt-1.5 text-xs flex items-center gap-1.5">
+                  {siteDetails?.parcel_count ? (
+                    <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      File uploaded ({siteDetails.parcel_count} parcels active)
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground italic">No parcel file uploaded</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
