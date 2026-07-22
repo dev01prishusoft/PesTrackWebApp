@@ -1493,8 +1493,7 @@ function captureGPS() {
       const lng = parseFloat(pos.coords.longitude.toFixed(6));
       document.getElementById('fi-coords').value = `${lat}, ${lng}`;
       
-      const acc = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : '';
-      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg> Captured${acc}!`;
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg> Captured!`;
       setTimeout(() => btn.innerHTML = originalHTML, 4000);
       
       // Auto-set nearest parcel if available
@@ -3740,12 +3739,34 @@ async function exportFindingsPDF(sortBy='number'){
       return '';
     }
 
+    function getGroupInfo(loc){
+      if(sortBy === 'category'){
+        const catId = loc.visits[0] && loc.visits[0].cat || '';
+        const catLabel = CAT_LABELS[catId] || catId || 'Uncategorized';
+        return { id: catId || 'uncategorized', label: `CATEGORY: ${catLabel.toUpperCase()}` };
+      } else if(sortBy === 'escalated'){
+        const esc = lastEscalated(loc) || 'Not Assigned';
+        return { id: esc, label: `ASSIGNED / ESCALATED TO: ${esc.toUpperCase()}` };
+      } else if(sortBy === 'quadrant'){
+        const parcelList = window._PARCELS || [];
+        const p = parcelList.find(px => px.name === loc.parcel);
+        const q = p ? p.quad : '';
+        const quadNames = { NW: 'North West (NW)', NE: 'North East (NE)', SW: 'South West (SW)', SE: 'South East (SE)' };
+        const qLabel = quadNames[q] || (q ? `${q} Quadrant` : 'Unassigned Quadrant');
+        return { id: q || 'unassigned', label: `QUADRANT: ${qLabel.toUpperCase()}` };
+      }
+      return null;
+    }
+
     let sorted;
     if(sortBy === 'category'){
       sorted = [...visibleFindings].sort((a,b)=>{
         const ca = CAT_ORDER.indexOf(a.visits[0]&&a.visits[0].cat||'');
         const cb = CAT_ORDER.indexOf(b.visits[0]&&b.visits[0].cat||'');
         if(ca !== cb) return (ca<0?99:ca) - (cb<0?99:cb);
+        const pa = a.parcel || '', pb = b.parcel || '';
+        const pCmp = pa.localeCompare(pb);
+        if(pCmp !== 0) return pCmp;
         return (a.refNum||'999') > (b.refNum||'999') ? 1 : -1;
       });
     } else if(sortBy === 'escalated'){
@@ -3754,17 +3775,15 @@ async function exportFindingsPDF(sortBy='number'){
         const eb = ESCALATED_ORDER.indexOf(lastEscalated(b));
         const ra = ea < 0 ? 99 : ea, rb = eb < 0 ? 99 : eb;
         if(ra !== rb) return ra - rb;
+        const pa = a.parcel || '', pb = b.parcel || '';
+        const pCmp = pa.localeCompare(pb);
+        if(pCmp !== 0) return pCmp;
         return (a.refNum||'999') > (b.refNum||'999') ? 1 : -1;
       });
     } else if(sortBy === 'quadrant'){
-      // Canonical quadrant order: NW → NE → SW → SE
       const QUAD_ORDER = ['NW','NE','SW','SE'];
-      // Build a lookup: parcel name → {quad, position in parcel list}
       const parcelList = window._PARCELS || [];
-      const parcelIdx  = {};
-      parcelList.forEach((p,i) => { parcelIdx[p.name] = i; });
       sorted = [...visibleFindings].sort((a,b) => {
-        // Determine each finding's quad from its assigned parcel
         const pA = parcelList.find(p=>p.name===a.parcel);
         const pB = parcelList.find(p=>p.name===b.parcel);
         const qA = QUAD_ORDER.indexOf(pA ? pA.quad : '');
@@ -3772,15 +3791,21 @@ async function exportFindingsPDF(sortBy='number'){
         const qAi = qA < 0 ? 99 : qA;
         const qBi = qB < 0 ? 99 : qB;
         if(qAi !== qBi) return qAi - qBi;
-        // Same quadrant — sort by parcel order within the parcel list
-        const piA = parcelIdx[a.parcel] !== undefined ? parcelIdx[a.parcel] : 999;
-        const piB = parcelIdx[b.parcel] !== undefined ? parcelIdx[b.parcel] : 999;
-        if(piA !== piB) return piA - piB;
-        // Same parcel — fall back to finding number
+        const pa = a.parcel || '', pb = b.parcel || '';
+        const pCmp = pa.localeCompare(pb);
+        if(pCmp !== 0) return pCmp;
         return (a.refNum||'999') > (b.refNum||'999') ? 1 : -1;
       });
     } else {
       sorted = [...visibleFindings].sort((a,b)=>(a.refNum||'999')>(b.refNum||'999')?1:-1);
+    }
+
+    const groupCounts = {};
+    if(sortBy === 'category' || sortBy === 'escalated' || sortBy === 'quadrant'){
+      for(const loc of sorted){
+        const g = getGroupInfo(loc);
+        if(g) groupCounts[g.id] = (groupCounts[g.id] || 0) + 1;
+      }
     }
 
     const sortLabel = sortBy==='category' ? 'Sorted by Category'
@@ -3794,7 +3819,21 @@ async function exportFindingsPDF(sortBy='number'){
       `Finding Details  ·  ${visibleFindings.length} location${visibleFindings.length!==1?'s':''}  ·  ${sortLabel}  ·  Prepared ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`);
     y = HDR+4;
 
+    let currentGroupId = null;
+
     for(const loc of sorted){
+      const gInfo = getGroupInfo(loc);
+      if(gInfo && gInfo.id !== currentGroupId){
+        currentGroupId = gInfo.id;
+        const count = groupCounts[gInfo.id] || 0;
+        ensurePage(14);
+        pdf.setFillColor(28,35,51); pdf.rect(ML, y, CW, 7, 'F');
+        pdf.setTextColor(255,255,255); pdf.setFontSize(8); pdf.setFont('helvetica','bold');
+        pdf.text(pdfText(gInfo.label), ML+3, y+4.8);
+        pdf.text(`${count} finding${count!==1?'s':''}`, ML+CW-3, y+4.8, {align:'right'});
+        y += 9;
+      }
+
       ensurePage(28);
       const latest = loc.visits[0];
       if(!latest) continue;

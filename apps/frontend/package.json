@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "rm -rf ../backend/public/assets ../backend/public/index.html",
+    "prebuild": "node -e \"const fs=require('fs'); ['../backend/public/assets', '../backend/public/index.html'].forEach(p => fs.rmSync(p, {recursive: true, force: true}))\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
