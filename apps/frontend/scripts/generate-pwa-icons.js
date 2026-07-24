@@ -11,7 +11,7 @@ const innerElements = originalSvg
   .replace(/<svg[\s\S]*?>/, '')
   .replace(/<\/svg>/, '');
 
-function createCompositeSvg({ targetSize, paddingRatio = 0.05, backgroundColor = null }) {
+function createCompositeSvg({ targetSize, paddingRatio = 0.08, backgroundColor = '#ffffff' }) {
   const outerWidth = targetSize;
   const outerHeight = targetSize;
   const contentArea = targetSize * (1 - 2 * paddingRatio);
@@ -21,9 +21,7 @@ function createCompositeSvg({ targetSize, paddingRatio = 0.05, backgroundColor =
   const translateX = (outerWidth - 1254 * scale) / 2;
   const translateY = (outerHeight - 1254 * scale) / 2;
 
-  const bgRect = backgroundColor 
-    ? `<rect width="${outerWidth}" height="${outerHeight}" fill="${backgroundColor}"/>` 
-    : '';
+  const bgRect = `<rect width="${outerWidth}" height="${outerHeight}" fill="${backgroundColor}"/>`;
 
   return `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}" viewBox="0 0 ${outerWidth} ${outerHeight}">
   ${bgRect}
@@ -67,14 +65,14 @@ function createIco(pngBuffers) {
 }
 
 const iconsToGenerate = [
-  { name: 'pwa-192x192.png', size: 192, padding: 0.05, bg: null },
-  { name: 'pwa-512x512.png', size: 512, padding: 0.05, bg: null },
-  { name: 'pwa-64x64.png', size: 64, padding: 0.05, bg: null },
+  { name: 'pwa-192x192.png', size: 192, padding: 0.08, bg: '#ffffff' },
+  { name: 'pwa-512x512.png', size: 512, padding: 0.08, bg: '#ffffff' },
+  { name: 'pwa-64x64.png', size: 64, padding: 0.08, bg: '#ffffff' },
   { name: 'pwa-maskable-192x192.png', size: 192, padding: 0.15, bg: '#ffffff' },
   { name: 'pwa-maskable-512x512.png', size: 512, padding: 0.15, bg: '#ffffff' },
   { name: 'apple-touch-icon.png', size: 180, padding: 0.10, bg: '#ffffff' },
-  { name: 'favicon-32x32.png', size: 32, padding: 0.04, bg: null },
-  { name: 'favicon-16x16.png', size: 16, padding: 0.04, bg: null },
+  { name: 'favicon-32x32.png', size: 32, padding: 0.04, bg: '#ffffff' },
+  { name: 'favicon-16x16.png', size: 16, padding: 0.04, bg: '#ffffff' },
 ];
 
 const generatedPngs = {};
@@ -94,7 +92,7 @@ for (const icon of iconsToGenerate) {
   const destPath = path.join('public', icon.name);
   fs.writeFileSync(destPath, pngBuffer);
   generatedPngs[icon.name] = { width: icon.size, height: icon.size, data: pngBuffer };
-  console.log(`Generated ${icon.name} (${icon.size}x${icon.size})`);
+  console.log(`Generated ${icon.name} (${icon.size}x${icon.size}) with solid background ${icon.bg}`);
 }
 
 // Generate favicon.ico
@@ -103,4 +101,4 @@ const icoBuffer = createIco([
   generatedPngs['favicon-32x32.png']
 ]);
 fs.writeFileSync('public/favicon.ico', icoBuffer);
-console.log('Generated public/favicon.ico');
+console.log('Generated public/favicon.ico with solid background');
