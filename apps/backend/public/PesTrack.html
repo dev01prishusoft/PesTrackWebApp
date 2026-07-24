@@ -361,8 +361,12 @@ async function exportFindings(){
     }
 
     const date = new Date().toISOString().slice(0,10);
+    const siteObj = (typeof sites !== 'undefined' && sites)
+      ? sites.find(s => s.id === currentSiteId) : null;
+    const siteName = (siteObj && siteObj.name) ? siteObj.name : 'Site';
+    const filePrefix = String(siteName).replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'Site';
     const payload = {
-      source:'PesTrack_SiteManager', client:'ElGouna',
+      source:'PesTrack_SiteManager', client: siteName,
       exportDate: date, includesPhotos: true,
       findings: exportFinds,
       constructionZones: window._ptConstrZones || []
@@ -372,7 +376,7 @@ async function exportFindings(){
     const blob = new Blob([json], {type:'application/json'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `ElGouna_Findings_${date}.json`;
+    a.download = `${filePrefix}_Findings_${date}.json`;
     a.style.display='none';
     document.body.appendChild(a);
     a.click();
