@@ -2013,7 +2013,7 @@ async function fetchPhotoBlob(src){
     const res = await fetch('/api/findings/photo?' + qs, {
       headers: { 'Authorization': 'Bearer ' + token }
     });
-    if(res.status === 401) throw new Error('Unauthorized');
+    if(res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
     if(!res.ok) throw new Error('Photo fetch failed');
     const blob = await res.blob();
     window._photoBlobCache.set(key, blob);
@@ -2064,8 +2064,8 @@ async function photoToDisplayUrl(src){
     window._blobUrls.push(url);
     return url;
   }
-  // Presigned S3 URLs work directly in <img> — no auth proxy needed.
-  if(/^https?:\/\//i.test(src)) return src;
+  // Prefer the auth proxy when we have an S3 key — presigned https URLs expire
+  // after ~1h and break if findings stay in memory across long idle sessions.
   if(key){
     try{
       const blob = await fetchPhotoBlob(src);
@@ -2074,9 +2074,11 @@ async function photoToDisplayUrl(src){
       return url;
     }catch(e){
       console.warn('photoToDisplayUrl failed:', e);
+      if(/^https?:\/\//i.test(src)) return src;
       return '';
     }
   }
+  if(/^https?:\/\//i.test(src)) return src;
   return src;
 }
 
@@ -2092,7 +2094,8 @@ async function ensurePopupPhoto(img){
   const src = window._photoSrcByKey[key];
   if(!src) return;
   let url = window._photoUrls[key];
-  if(!url){
+  // Don't reuse cached https (presigned) URLs — they may already be expired.
+  if(!url || /^https?:\/\//i.test(url)){
     url = await photoToDisplayUrl(src);
     if(url) window._photoUrls[key] = url;
   }
@@ -2403,6 +2406,7 @@ function loadFindings(){
   .then(data => {
     findings = data.findings.map(mapApiFinding);
     window._ptFindings = findings;
+    findingsLoadedAt = Date.now();
     return renderAllFindings().then(() => {
       prefetchPhotosForPdf();
       showNotif('✅ Findings loaded');
@@ -2462,8 +2466,81 @@ function hideLogin() {
   document.getElementById('app-container').style.display = 'block';
 }
 
+// ── 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
+const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'pt_last_activity';
+// Re-fetch findings before S3 PRESIGN_TTL (1h) so photo URLs stay usable
+// when the tab stays open with occasional activity.
+const FINDINGS_STALE_MS = 50 * 60 * 1000;
+let inactivityTimer = null;
+let findingsLoadedAt = 0;
+let _logoutNotifPending = false;
+let _lastTouchWrite = 0;
+
+function touchActivity(force) {
+  const now = Date.now();
+  // Avoid hammering localStorage on every mousemove; 15s skew is fine for a 60m idle policy.
+  if (!force && now - _lastTouchWrite < 15000) return;
+  _lastTouchWrite = now;
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+}
+
+function idleMs() {
+  const raw = localStorage.getItem(LAST_ACTIVITY_KEY);
+  if (!raw) return Infinity;
+  const ts = Number(raw);
+  if (!Number.isFinite(ts)) return Infinity;
+  return Date.now() - ts;
+}
+
+function expireSessionForInactivity() {
+  if (_logoutNotifPending || !localStorage.getItem('pt_token')) return;
+  _logoutNotifPending = true;
+  showNotif('⚠️ Session expired due to 60 minutes of inactivity. Logging out...', true, 5000);
+  setTimeout(() => {
+    _logoutNotifPending = false;
+    logout();
+  }, 1500);
+}
+
+function resetInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  const token = localStorage.getItem('pt_token');
+  if (!token) return;
+
+  touchActivity();
+  inactivityTimer = setTimeout(() => {
+    expireSessionForInactivity();
+  }, INACTIVITY_TIMEOUT_MS);
+}
+
+function checkInactivityOnResume() {
+  const token = localStorage.getItem('pt_token');
+  if (!token) return;
+
+  if (idleMs() >= INACTIVITY_TIMEOUT_MS) {
+    expireSessionForInactivity();
+    return;
+  }
+
+  // Tab was suspended: reschedule remaining idle time from last activity.
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  const remaining = Math.max(0, INACTIVITY_TIMEOUT_MS - idleMs());
+  inactivityTimer = setTimeout(() => {
+    expireSessionForInactivity();
+  }, remaining);
+
+  // Refresh findings if in-memory photo URLs are likely past PRESIGN_TTL.
+  if (currentSiteId && findingsLoadedAt && (Date.now() - findingsLoadedAt) >= FINDINGS_STALE_MS) {
+    loadFindings();
+  }
+}
+
 function handleUnauthorized() {
   localStorage.removeItem('pt_token');
+  localStorage.removeItem(LAST_ACTIVITY_KEY);
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = null;
   showLogin();
 }
 
@@ -2475,32 +2552,19 @@ function logout() {
       headers: { 'Authorization': 'Bearer ' + token }
     }).catch(() => {}); // Fire and forget
   }
+  // SPA-style logout: clear token + show login in-place.
+  // Avoid window.location.assign — a full reload wakes Render (cold start).
   handleUnauthorized();
-  // Return to the PesTrack login screen (this page), not the admin panel.
-  window.location.assign('/PesTrack.html');
 }
 window.logout = logout;
-
-// ── 5-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
-let inactivityTimer = null;
-
-function resetInactivityTimer() {
-  if (inactivityTimer) clearTimeout(inactivityTimer);
-  const token = localStorage.getItem('pt_token');
-  if (!token) return;
-
-  inactivityTimer = setTimeout(() => {
-    showNotif('⚠️ Session expired due to 5 minutes of inactivity. Logging out...', true, 5000);
-    setTimeout(() => {
-      logout();
-    }, 1500);
-  }, INACTIVITY_TIMEOUT_MS);
-}
 
 ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach((evt) => {
   window.addEventListener(evt, resetInactivityTimer, { passive: true });
 });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkInactivityOnResume();
+});
+window.addEventListener('focus', checkInactivityOnResume);
 resetInactivityTimer();
 
 function togglePassword() {
@@ -2548,9 +2612,11 @@ function login() {
   })
   .then(data => {
     localStorage.setItem('pt_token', data.token);
+    touchActivity(true);
     currentUser = data.user;
     hideLogin();
     bootApp();
+    resetInactivityTimer();
   })
   .catch(err => {
     errDiv.textContent = err.message;
@@ -2575,6 +2641,12 @@ function checkAuthAndStart() {
     showLogin();
     return;
   }
+
+  // Enforce idle across reloads / tab discard (timer alone is not enough).
+  if (idleMs() >= INACTIVITY_TIMEOUT_MS) {
+    handleUnauthorized();
+    return;
+  }
   
   fetch('/api/auth/me', {
     headers: { 'Authorization': 'Bearer ' + token }
@@ -2585,8 +2657,10 @@ function checkAuthAndStart() {
   })
   .then(user => {
     currentUser = user.user;
+    touchActivity(true);
     hideLogin();
     bootApp();
+    resetInactivityTimer();
   })
   .catch(err => {
     console.error(err);

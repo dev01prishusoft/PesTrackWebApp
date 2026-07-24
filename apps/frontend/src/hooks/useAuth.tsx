@@ -11,22 +11,60 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx>(null as unknown as AuthCtx);
 
+const INACTIVITY_MS = 60 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'pt_admin_last_activity';
+const TOUCH_THROTTLE_MS = 15_000;
+
+let lastTouchWrite = 0;
+
+function touchActivity(force = false) {
+  const now = Date.now();
+  if (!force && now - lastTouchWrite < TOUCH_THROTTLE_MS) return;
+  lastTouchWrite = now;
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+}
+
+function idleMs() {
+  const raw = localStorage.getItem(LAST_ACTIVITY_KEY);
+  if (!raw) return Infinity;
+  const ts = Number(raw);
+  if (!Number.isFinite(ts)) return Infinity;
+  return Date.now() - ts;
+}
+
+function clearActivity() {
+  localStorage.removeItem(LAST_ACTIVITY_KEY);
+  lastTouchWrite = 0;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => setUser(null));
+    setUnauthorizedHandler(() => {
+      clearActivity();
+      setUser(null);
+    });
     if (!getToken()) {
+      setLoading(false);
+      return;
+    }
+    // Enforce idle across reloads / tab discard (timer alone is not enough).
+    if (idleMs() >= INACTIVITY_MS) {
+      clearToken();
+      clearActivity();
       setLoading(false);
       return;
     }
     api<{ user: AuthUser }>('/api/auth/me')
       .then((d) => {
+        touchActivity(true);
         setUser(d.user);
       })
       .catch(() => {
         clearToken();
+        clearActivity();
         setUser(null);
       })
       .finally(() => setLoading(false));
@@ -35,23 +73,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023)
   useEffect(() => {
     if (!user) return;
-    const INACTIVITY_MS = 60 * 60 * 1000;
     let timer: ReturnType<typeof setTimeout>;
 
-    const resetTimer = () => {
+    const scheduleFromLastActivity = () => {
       clearTimeout(timer);
+      const remaining = Math.max(0, INACTIVITY_MS - idleMs());
       timer = setTimeout(() => {
         logout();
-      }, INACTIVITY_MS);
+      }, remaining);
     };
 
-    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    const resetTimer = () => {
+      touchActivity();
+      scheduleFromLastActivity();
+    };
+
+    const onResume = () => {
+      if (idleMs() >= INACTIVITY_MS) {
+        logout();
+        return;
+      }
+      scheduleFromLastActivity();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') onResume();
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'] as const;
     events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onResume);
     resetTimer();
 
     return () => {
       clearTimeout(timer);
       events.forEach((evt) => window.removeEventListener(evt, resetTimer));
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onResume);
     };
   }, [user]);
 
@@ -66,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     setToken(d.token);
+    touchActivity(true);
     setUser(d.user);
   }
 
@@ -74,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // login route via React Router. Doing a hard window.location navigation here
     // too would double-fire (client redirect, then full reload) and flash.
     clearToken();
+    clearActivity();
     setUser(null);
   }
 

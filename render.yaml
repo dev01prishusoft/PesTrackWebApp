@@ -35,7 +35,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRY
-        value: 24h
+        value: 8h
       # Admin bootstrap (used by `npm run seed`). Set real values in the dashboard.
       - key: ADMIN_USERNAME
         sync: false
