@@ -60,9 +60,9 @@ async function logAction({
   newValues = null,
 }) {
   const userId = req.user ? req.user.id : null;
-  const rawIp = req.ip || req.socket?.remoteAddress || '';
+  const rawIp = req.ip || req.socket?.remoteAddress || (req.headers && req.headers['x-forwarded-for']) || '';
   const ip = rawIp.replace(/^::ffff:/, '') || null;
-  const userAgent = req.headers['user-agent'] || null;
+  const userAgent = (req.headers && req.headers['user-agent']) || null;
 
   await query(
     `INSERT INTO audit_logs

@@ -745,6 +745,8 @@ function importParcelsXlsx(input){
   if(!file){ return; }
   if (requireSite()) { input.value = ''; return; }
 
+  const prevParcels = (window._PARCELS || []).map(p => ({ ...p }));
+
   showNotif('⏳ Uploading parcel list...', false, 0);
   const formData = new FormData();
   formData.append('file', file);
@@ -763,7 +765,55 @@ function importParcelsXlsx(input){
   })
   .then(data => {
     loadParcels().then(() => {
-      showNotif('✅ Parcel list updated');
+      const quadChanges = [];
+      const coordChanges = [];
+
+      if (prevParcels && prevParcels.length) {
+        const newParcels = window._PARCELS || [];
+        newParcels.forEach(np => {
+          const op = prevParcels.find(p => p.name === np.name);
+          if (!op || (op.name && op.name.includes('General'))) return;
+          if (op.quad !== np.quad) {
+            quadChanges.push(`"${np.name}": ${op.quad || 'None'} → ${np.quad || 'None'}`);
+          } else if (op.lat != null && op.lng != null && np.lat != null && np.lng != null) {
+            const dLat = Math.abs(op.lat - np.lat), dLng = Math.abs(op.lng - np.lng);
+            if (dLat > 0.0001 || dLng > 0.0001) {
+              coordChanges.push(`"${np.name}"`);
+            }
+          }
+        });
+      }
+
+      if (quadChanges.length || coordChanges.length) {
+        const notifEl = document.getElementById('notif');
+        if (notifEl) notifEl.style.display = 'none';
+
+        let html = `<p style="margin-bottom:10px;font-size:.82rem;color:#374151">Parcels updated successfully. Some existing parcels have changed:</p>`;
+        if (quadChanges.length) {
+          html += `<p style="font-size:.75rem;font-weight:700;color:#B45309;margin-bottom:4px">⚠️ Quadrant changed (affects existing findings' quadrant grouping in PDF):</p>`;
+          html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px;max-height:260px;overflow-y:auto">${quadChanges.map(c => `<li>${c}</li>`).join('')}</ul>`;
+        }
+        if (coordChanges.length) {
+          html += `<p style="font-size:.75rem;font-weight:700;color:#1D4ED8;margin-bottom:4px">ℹ️ Coordinates moved (affects auto-detection for new findings only):</p>`;
+          html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px;max-height:260px;overflow-y:auto">${coordChanges.map(c => `<li>${c}</li>`).join('')}</ul>`;
+        }
+        if (quadChanges.length) {
+          html += `<p style="font-size:.72rem;color:#6B7280">Existing findings keep their assigned parcel name. Their quadrant in the PDF now reflects the updated quadrant above.</p>`;
+        }
+
+        let warnMod = document.getElementById('m-parcel-warn');
+        if (!warnMod) {
+          warnMod = document.createElement('div');
+          warnMod.className = 'mov'; warnMod.id = 'm-parcel-warn';
+          warnMod.innerHTML = '<div class="mod" style="max-width:420px"><h3>&#128194; Parcels Updated</h3><div id="parcel-warn-body"></div><div class="mbtns"><button class="bok" onclick="document.getElementById(\'m-parcel-warn\').style.display=\'none\'">OK</button></div></div>';
+          document.body.appendChild(warnMod);
+        }
+        document.getElementById('parcel-warn-body').innerHTML = html;
+        warnMod.style.display = 'flex';
+      } else {
+        const loadedCount = (data && data.totalRows != null) ? data.totalRows : ((data && Array.isArray(data.parcels)) ? data.parcels.length : (window._PARCELS || []).filter(p => !p.name.includes('General')).length);
+        showNotif(`✅ ${loadedCount} parcels loaded from ${file.name}`);
+      }
     });
   })
   .catch(err => {

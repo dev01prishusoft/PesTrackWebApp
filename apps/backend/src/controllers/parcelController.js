@@ -38,12 +38,12 @@ async function uploadParcels(req, res, next) {
       return res.status(400).json({ error: 'Uploaded sheet is empty' });
     }
 
-    // Fetch existing parcels to track quad/coord updates for warnings
-    const { rows: existingRows } = await query(
-      'SELECT parcel_name, lat, lng, quadrant FROM parcels WHERE site_id = $1',
+    // Fetch existing parcels to track quad/coord updates for warnings in deterministic order
+    const { rows: existingParcels } = await query(
+      'SELECT id, parcel_name, lat, lng, quadrant FROM parcels WHERE site_id = $1 ORDER BY created_at ASC, id ASC',
       [siteId]
     );
-    const prevMap = new Map(existingRows.map((r) => [r.parcel_name, r]));
+    const usedParcelIds = new Set();
 
     const insertedParcels = [];
     const skipped = []; // rows that violated a column length limit
@@ -99,7 +99,7 @@ async function uploadParcels(req, res, next) {
       const gpsVal = findVal(['coordinate', 'gps', 'coordinates', 'location', 'lat,long', 'lat,lng', 'gps coordinates']);
       const quadrant = findVal(['quadrant', 'quad', 'zone']);
 
-      if (!name) continue; // Skip rows without name
+      if (!name || !quadrant) continue; // Skip rows without parcel name or quadrant (matches client standalone HTML)
       if (String(name).length > 100) { skipped.push({ name: String(name).slice(0, 40), reason: 'name too long (max 100)' }); continue; }
       if (quadrant != null && String(quadrant).length > 10) { skipped.push({ name: String(name), reason: 'quadrant too long (max 10)' }); continue; }
 
@@ -120,39 +120,65 @@ async function uploadParcels(req, res, next) {
         }
       }
 
-      // Check if parcel name already exists for this site
-      const existingParcel = await query(
-        `SELECT id, lat, lng, quadrant FROM parcels
-         WHERE site_id = $1 AND parcel_name = $2
-         LIMIT 1`,
-        [siteId, name]
-      );
+      const rawCoordStr = gpsVal ? String(gpsVal).trim() : (latVal !== null && lngVal !== null ? `${latVal}, ${lngVal}` : null);
+
+      // Find an unused existing parcel record matching this parcel name
+      const op = existingParcels.find(p => p.parcel_name === name && !usedParcelIds.has(p.id));
 
       let parcelRow;
-      if (existingParcel.rows[0]) {
-        const op = existingParcel.rows[0];
-        if (quadrant && op.quadrant !== quadrant) {
-          quadChanges.push(`"${name}": ${op.quadrant || 'None'} → ${quadrant}`);
-        } else if (lat != null && lng != null && (Math.abs(op.lat - lat) > 0.0001 || Math.abs(op.lng - lng) > 0.0001)) {
-          coordChanges.push(`"${name}"`);
+      if (op) {
+        usedParcelIds.add(op.id);
+        const opLat = op.lat != null ? Number(op.lat) : null;
+        const opLng = op.lng != null ? Number(op.lng) : null;
+        const opQuad = op.quadrant != null ? String(op.quadrant).trim() : '';
+        const newQuad = quadrant != null ? String(quadrant).trim() : '';
+
+        if (newQuad && opQuad !== newQuad) {
+          quadChanges.push(`"${name}": ${opQuad || 'None'} → ${newQuad}`);
+        } else if (lat != null && lng != null && opLat != null && opLng != null) {
+          const dLat = Math.abs(opLat - lat);
+          const dLng = Math.abs(opLng - lng);
+          if (dLat > 0.0001 || dLng > 0.0001) {
+            coordChanges.push(`"${name}"`);
+          }
         }
 
         const { rows } = await query(
-          `UPDATE parcels SET lat = COALESCE($2, lat), lng = COALESCE($3, lng), quadrant = COALESCE($4, quadrant), updated_at = NOW()
-           WHERE id = $1 RETURNING *`,
-          [op.id, lat, lng, quadrant]
+          `UPDATE parcels
+              SET lat = COALESCE($2, lat),
+                  lng = COALESCE($3, lng),
+                  quadrant = COALESCE($4, quadrant),
+                  coordinate = COALESCE($5, coordinate),
+                  updated_at = NOW()
+            WHERE id = $1 RETURNING *`,
+          [op.id, lat, lng, quadrant, rawCoordStr]
         );
         parcelRow = rows[0];
       } else {
         const { rows } = await query(
-          `INSERT INTO parcels (site_id, parcel_name, lat, lng, quadrant, updated_at)
-           VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-          [siteId, name, lat, lng, quadrant]
+          `INSERT INTO parcels (site_id, parcel_name, coordinate, lat, lng, quadrant, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
+          [siteId, name, rawCoordStr, lat, lng, quadrant]
         );
         parcelRow = rows[0];
       }
       insertedParcels.push(parcelRow);
     }
+
+    // Auto-map any unassigned finding locations for this site to their nearest parcel
+    await query(
+      `UPDATE locations l
+          SET parcel_id = sub.parcel_id
+         FROM (
+           SELECT DISTINCT ON (l.id) l.id AS loc_id, p.id AS parcel_id
+             FROM locations l
+             JOIN parcels p ON p.site_id = l.site_id
+            WHERE l.site_id = $1 AND l.parcel_id IS NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+            ORDER BY l.id, ((l.lat - p.lat)^2 + (l.lng - p.lng)^2) ASC
+         ) sub
+        WHERE l.id = sub.loc_id`,
+      [siteId]
+    );
 
     await logAction({
       req,
@@ -168,9 +194,10 @@ async function uploadParcels(req, res, next) {
         ? `Processed ${insertedParcels.length} parcels. Skipped ${skipped.length} invalid row(s).`
         : `Successfully processed ${insertedParcels.length} parcels.`,
       parcels: insertedParcels,
+      totalRows: insertedParcels.length,
       skipped,
-      quadChanges: [...new Set(quadChanges)],
-      coordChanges: [...new Set(coordChanges)],
+      quadChanges,
+      coordChanges,
     });
   } catch (err) {
     console.error('Error uploading parcel XLSX:', err);
