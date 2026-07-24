@@ -26,6 +26,67 @@ const inputCls =
   'w-full px-3 py-2 text-sm rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40';
 const labelCls = 'block text-xs font-semibold text-muted-foreground mb-1';
 
+function ParcelWarnModal({
+  quadChanges,
+  coordChanges,
+  onClose,
+}: {
+  quadChanges: string[];
+  coordChanges: string[];
+  fileName?: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-[60]">
+      <div className="bg-card border border-border rounded-2xl shadow-xl w-[420px] max-w-[94vw] p-5 flex flex-col gap-3">
+        <h3 className="text-base font-bold text-foreground flex items-center gap-2 m-0 border-b border-border pb-3">
+          📁 Parcels Updated
+        </h3>
+
+        <p className="text-xs text-muted-foreground m-0">
+          Parcels updated successfully. Some existing parcels have changed:
+        </p>
+
+        {quadChanges.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-amber-600 dark:text-amber-500 mb-1 m-0">
+              ⚠️ Quadrant changed (affects existing findings' quadrant grouping in PDF):
+            </p>
+            <ul className="list-disc pl-5 text-xs text-foreground space-y-0.5 max-h-[260px] overflow-y-auto m-0 mb-2">
+              {quadChanges.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {coordChanges.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 m-0">
+              ℹ️ Coordinates moved (affects auto-detection for new findings only):
+            </p>
+            <ul className="list-disc pl-5 text-xs text-foreground space-y-0.5 max-h-[260px] overflow-y-auto m-0 mb-2">
+              {coordChanges.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {quadChanges.length > 0 && (
+          <p className="text-[11px] text-muted-foreground m-0">
+            Existing findings keep their assigned parcel name. Their quadrant in the PDF now reflects the updated quadrant above.
+          </p>
+        )}
+
+        <div className="flex justify-end pt-2 border-t border-border">
+          <Button onClick={onClose}>OK</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }) {
   const editing = !!site;
   const toast = useToast();
@@ -43,6 +104,8 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const [zoom, setZoom] = useState(site?.default_zoom?.toString() ?? '14');
   const [file, setFile] = useState<File | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [warnData, setWarnData] = useState<{ quadChanges: string[]; coordChanges: string[]; fileName: string } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (siteDetails) {
@@ -123,6 +186,7 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
       defaultZoom: parseInt(zoom, 10),
     };
 
+    setIsSaving(true);
     try {
       let savedSiteId = site?.id;
       if (editing) {
@@ -134,6 +198,8 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 
       if (!savedSiteId) throw new Error('Site ID could not be determined');
 
+      let pendingWarn: { quadChanges: string[]; coordChanges: string[]; fileName: string } | null = null;
+
       if (file) {
         const token = getToken();
         const formData = new FormData();
@@ -144,9 +210,16 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: formData,
         });
+        const uploadData = await uploadRes.json().catch(() => ({}));
         if (!uploadRes.ok) {
-          const uploadData = await uploadRes.json().catch(() => ({}));
           throw new Error(uploadData.error || 'Failed to upload parcel list');
+        }
+        if (uploadData.quadChanges?.length || uploadData.coordChanges?.length) {
+          pendingWarn = {
+            quadChanges: uploadData.quadChanges || [],
+            coordChanges: uploadData.coordChanges || [],
+            fileName: file.name,
+          };
         }
       }
 
@@ -170,109 +243,129 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
         toast.warning('Site saved, but some user assignments could not be applied.');
       }
 
-      onClose();
+      if (pendingWarn) {
+        setWarnData(pendingWarn);
+      } else {
+        onClose();
+      }
     } catch (e) {
       // Surface conflicts (e.g. duplicate site name) as a toast using the
       // backend message — no inline field/banner error.
       toast.error((e as Error).message);
+    } finally {
+      setIsSaving(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-50">
-      <div className="bg-card border border-border rounded-2xl shadow-xl w-[620px] max-w-[94vw] max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h3 className="text-lg font-bold m-0">{editing ? 'Edit Site' : 'New Site'}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted"><X size={18} /></button>
-        </div>
+    <>
+      <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-50">
+        <div className="bg-card border border-border rounded-2xl shadow-xl w-[620px] max-w-[94vw] max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h3 className="text-lg font-bold m-0">{editing ? 'Edit Site' : 'New Site'}</h3>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted"><X size={18} /></button>
+          </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {isLoadingSite ? (
-            <div className="flex flex-col justify-center items-center h-40 gap-4 text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(45, 138, 78, 0.2)',
-                borderTop: '3px solid #2d8a4e',
-                borderRadius: '50%',
-                animation: 'global-spin 1s linear infinite',
-              }}></div>
-              <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
-              <div>
-              <label className={labelCls}>Site name <span className="text-destructive">*</span></label>
-              <input className={inputCls} maxLength={255} value={name} onChange={(e) => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: '' })); }} placeholder="Site Name" />
-              {fieldErrors.name && <p className="text-destructive text-xs mt-1">{fieldErrors.name}</p>}
-            </div>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {isLoadingSite ? (
+              <div className="flex flex-col justify-center items-center h-40 gap-4 text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  border: '3px solid rgba(45, 138, 78, 0.2)',
+                  borderTop: '3px solid #2d8a4e',
+                  borderRadius: '50%',
+                  animation: 'global-spin 1s linear infinite',
+                }}></div>
+                <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 pb-4">
+                <div>
+                  <label className={labelCls}>Site name <span className="text-destructive">*</span></label>
+                  <input className={inputCls} maxLength={255} value={name} onChange={(e) => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: '' })); }} placeholder="Site Name" />
+                  {fieldErrors.name && <p className="text-destructive text-xs mt-1">{fieldErrors.name}</p>}
+                </div>
 
-            <div>
-              <label className={labelCls}>Default zoom <span className="text-destructive">*</span></label>
-              <input className={inputCls} type="number" value={zoom} onChange={(e) => { setZoom(e.target.value); setFieldErrors(prev => ({ ...prev, zoom: '' })); }} placeholder="Default Zoom (e.g. 14)" />
-              {fieldErrors.zoom && <p className="text-destructive text-xs mt-1">{fieldErrors.zoom}</p>}
-            </div>
+                <div>
+                  <label className={labelCls}>Default zoom <span className="text-destructive">*</span></label>
+                  <input className={inputCls} type="number" value={zoom} onChange={(e) => { setZoom(e.target.value); setFieldErrors(prev => ({ ...prev, zoom: '' })); }} placeholder="Default Zoom (e.g. 14)" />
+                  {fieldErrors.zoom && <p className="text-destructive text-xs mt-1">{fieldErrors.zoom}</p>}
+                </div>
 
-            <div>
-              <label className={labelCls}>Map center latitude <span className="text-destructive">*</span></label>
-              <input className={inputCls} type="number" step="any" value={lat} onChange={(e) => { setLat(e.target.value); setFieldErrors(prev => ({ ...prev, lat: '' })); }} placeholder="Latitude (e.g. 27.3949)" />
-              {fieldErrors.lat && <p className="text-destructive text-xs mt-1">{fieldErrors.lat}</p>}
-            </div>
+                <div>
+                  <label className={labelCls}>Map center latitude <span className="text-destructive">*</span></label>
+                  <input className={inputCls} type="number" step="any" value={lat} onChange={(e) => { setLat(e.target.value); setFieldErrors(prev => ({ ...prev, lat: '' })); }} placeholder="Latitude (e.g. 27.3949)" />
+                  {fieldErrors.lat && <p className="text-destructive text-xs mt-1">{fieldErrors.lat}</p>}
+                </div>
 
-            <div>
-              <label className={labelCls}>Map center longitude <span className="text-destructive">*</span></label>
-              <input className={inputCls} type="number" step="any" value={lng} onChange={(e) => { setLng(e.target.value); setFieldErrors(prev => ({ ...prev, lng: '' })); }} placeholder="Longitude (e.g. 33.6782)" />
-              {fieldErrors.lng && <p className="text-destructive text-xs mt-1">{fieldErrors.lng}</p>}
-            </div>
+                <div>
+                  <label className={labelCls}>Map center longitude <span className="text-destructive">*</span></label>
+                  <input className={inputCls} type="number" step="any" value={lng} onChange={(e) => { setLng(e.target.value); setFieldErrors(prev => ({ ...prev, lng: '' })); }} placeholder="Longitude (e.g. 33.6782)" />
+                  {fieldErrors.lng && <p className="text-destructive text-xs mt-1">{fieldErrors.lng}</p>}
+                </div>
 
-            <div>
-              <label className={labelCls}>Parcel list upload (XLSX)</label>
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80 cursor-pointer border border-input rounded-lg bg-card py-1 px-2"
-              />
-              {editing && (
-                <div className="mt-1.5 text-xs flex items-center gap-1.5">
-                  {siteDetails?.parcel_count ? (
-                    <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      File uploaded ({siteDetails.parcel_count} parcels active)
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground italic">No parcel file uploaded</span>
+                <div>
+                  <label className={labelCls}>Parcel list upload (XLSX)</label>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80 cursor-pointer border border-input rounded-lg bg-card py-1 px-2"
+                  />
+                  {editing && (
+                    <div className="mt-1.5 text-xs flex items-center gap-1.5">
+                      {siteDetails?.parcel_count ? (
+                        <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          File uploaded ({siteDetails.parcel_count} parcels active)
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground italic">No parcel file uploaded</span>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <div>
-              <label className={labelCls}>Assigned users</label>
-              <MultiSelect
-                options={userOptions}
-                selectedIds={userIds}
-                onChange={(ids) => setUserIds(ids)}
-                placeholder="Assign users to site..."
-                openDirection="up"
-                onSearchChange={setUserSearch}
-                onLoadMore={() => fetchNextPage()}
-                hasMore={hasNextPage}
-                isLoading={isFetchingNextPage}
-              />
-            </div>
+                <div>
+                  <label className={labelCls}>Assigned users</label>
+                  <MultiSelect
+                    options={userOptions}
+                    selectedIds={userIds}
+                    onChange={(ids) => setUserIds(ids)}
+                    placeholder="Assign users to site..."
+                    openDirection="up"
+                    onSearchChange={setUserSearch}
+                    onLoadMore={() => fetchNextPage()}
+                    hasMore={hasNextPage}
+                    isLoading={isFetchingNextPage}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-          )}
-        </div>
 
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-border bg-muted/10">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={isLoadingSite || create.isPending || update.isPending}>
-            {create.isPending || update.isPending ? 'Saving…' : 'Save'}
-          </Button>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-border bg-muted/10">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={save} disabled={isLoadingSite || create.isPending || update.isPending || isSaving}>
+              {create.isPending || update.isPending || isSaving ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {warnData && (
+        <ParcelWarnModal
+          quadChanges={warnData.quadChanges}
+          coordChanges={warnData.coordChanges}
+          fileName={warnData.fileName}
+          onClose={() => {
+            setWarnData(null);
+            onClose();
+          }}
+        />
+      )}
+    </>
   );
 }
 

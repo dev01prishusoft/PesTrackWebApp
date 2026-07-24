@@ -122,15 +122,12 @@ async function uploadParcels(req, res, next) {
 
       const rawCoordStr = gpsVal ? String(gpsVal).trim() : (latVal !== null && lngVal !== null ? `${latVal}, ${lngVal}` : null);
 
-      // Find an unused existing parcel record matching this parcel name
-      const op = existingParcels.find(p => p.parcel_name === name && !usedParcelIds.has(p.id));
-
-      let parcelRow;
-      if (op) {
-        usedParcelIds.add(op.id);
-        const opLat = op.lat != null ? Number(op.lat) : null;
-        const opLng = op.lng != null ? Number(op.lng) : null;
-        const opQuad = op.quadrant != null ? String(op.quadrant).trim() : '';
+      // Find primary existing parcel for this name to track quad/coord diffs (matches client standalone logic)
+      const firstOp = existingParcels.find(p => p.parcel_name === name);
+      if (firstOp) {
+        const opLat = firstOp.lat != null ? Number(firstOp.lat) : null;
+        const opLng = firstOp.lng != null ? Number(firstOp.lng) : null;
+        const opQuad = firstOp.quadrant != null ? String(firstOp.quadrant).trim() : '';
         const newQuad = quadrant != null ? String(quadrant).trim() : '';
 
         if (newQuad && opQuad !== newQuad) {
@@ -142,7 +139,14 @@ async function uploadParcels(req, res, next) {
             coordChanges.push(`"${name}"`);
           }
         }
+      }
 
+      // Find an unused existing parcel record matching this parcel name to update, or insert new
+      const op = existingParcels.find(p => p.parcel_name === name && !usedParcelIds.has(p.id));
+
+      let parcelRow;
+      if (op) {
+        usedParcelIds.add(op.id);
         const { rows } = await query(
           `UPDATE parcels
               SET lat = COALESCE($2, lat),
