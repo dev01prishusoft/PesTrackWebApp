@@ -12,7 +12,7 @@ interface AuthCtx {
 const Ctx = createContext<AuthCtx>(null as unknown as AuthCtx);
 
 // Temporarily set to 3 minutes for testing (was 60 * 60 * 1000)
-const INACTIVITY_MS = 60 * 60 * 1000;
+const INACTIVITY_MS = 3 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'pt_admin_last_activity';
 const TOUCH_THROTTLE_MS = 15_000;
 

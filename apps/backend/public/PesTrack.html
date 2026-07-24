@@ -2517,7 +2517,7 @@ function hideLogin() {
 }
 
 // ── 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
-const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
+const INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'pt_last_activity';
 // Re-fetch findings before S3 PRESIGN_TTL (1h) so photo URLs stay usable
 // when the tab stays open with occasional activity.
