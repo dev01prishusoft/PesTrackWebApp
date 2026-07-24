@@ -645,7 +645,7 @@ const CATEGORY_MAP = {
   'stp_trench': 'STP / Trenches',
   'organic': 'Exposed Waste',
   'structural': 'Dysfunctional Swim Pool',
-  'housekeeping': 'Structural',
+  'housekeeping': 'Standing water - Other',
   'irrigation': 'Landscape/Irrigation',
   'construction': 'Construction Debris',
   'mep': 'Drains & Manholes',
@@ -3863,21 +3863,32 @@ async function exportFindingsPDF(sortBy='number'){
       return '';
     }
 
+    function drawCategoryHeader(catName){
+      ensurePage(14);
+      pdf.setFillColor(28,35,51); // Black/Dark
+      pdf.rect(ML, y, CW, 10, 'F');
+      pdf.setTextColor(255,255,255);
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica','bold');
+      pdf.text(pdfText(catName), ML + CW/2, y + 6.5, {align:'center'});
+      y += 12;
+    }
+
     function getGroupInfo(loc){
       if(sortBy === 'category'){
         const catId = loc.visits[0] && loc.visits[0].cat || '';
         const catLabel = CAT_LABELS[catId] || catId || 'Uncategorized';
-        return { id: catId || 'uncategorized', label: `CATEGORY: ${catLabel.toUpperCase()}` };
+        return { id: catId || 'uncategorized', label: catLabel };
       } else if(sortBy === 'escalated'){
         const esc = lastEscalated(loc) || 'Not Assigned';
-        return { id: esc, label: `ASSIGNED / ESCALATED TO: ${esc.toUpperCase()}` };
+        return { id: esc, label: esc };
       } else if(sortBy === 'quadrant'){
         const parcelList = window._PARCELS || [];
         const p = parcelList.find(px => px.name === loc.parcel);
         const q = p ? p.quad : '';
         const quadNames = { NW: 'North West (NW)', NE: 'North East (NE)', SW: 'South West (SW)', SE: 'South East (SE)' };
         const qLabel = quadNames[q] || (q ? `${q} Quadrant` : 'Unassigned Quadrant');
-        return { id: q || 'unassigned', label: `QUADRANT: ${qLabel.toUpperCase()}` };
+        return { id: q || 'unassigned', label: qLabel };
       }
       return null;
     }
@@ -3949,13 +3960,7 @@ async function exportFindingsPDF(sortBy='number'){
       const gInfo = getGroupInfo(loc);
       if(gInfo && gInfo.id !== currentGroupId){
         currentGroupId = gInfo.id;
-        const count = groupCounts[gInfo.id] || 0;
-        ensurePage(14);
-        pdf.setFillColor(28,35,51); pdf.rect(ML, y, CW, 7, 'F');
-        pdf.setTextColor(255,255,255); pdf.setFontSize(8); pdf.setFont('helvetica','bold');
-        pdf.text(pdfText(gInfo.label), ML+3, y+4.8);
-        pdf.text(`${count} finding${count!==1?'s':''}`, ML+CW-3, y+4.8, {align:'right'});
-        y += 9;
+        drawCategoryHeader(gInfo.label);
       }
 
       ensurePage(28);
