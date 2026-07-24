@@ -2481,8 +2481,8 @@ function logout() {
 }
 window.logout = logout;
 
-// ── 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
-const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
+// ── 5-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 let inactivityTimer = null;
 
 function resetInactivityTimer() {
@@ -2491,7 +2491,7 @@ function resetInactivityTimer() {
   if (!token) return;
 
   inactivityTimer = setTimeout(() => {
-    showNotif('⚠️ Session expired due to 60 minutes of inactivity. Logging out...', true, 5000);
+    showNotif('⚠️ Session expired due to 5 minutes of inactivity. Logging out...', true, 5000);
     setTimeout(() => {
       logout();
     }, 1500);
