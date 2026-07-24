@@ -94,11 +94,21 @@ async function seed() {
 
     // 3. Parcels
     for (const [name, lat, lng, quadrant] of PARCELS) {
-      await client.query(
-        `INSERT INTO parcels (site_id, parcel_name, lat, lng, quadrant) VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (site_id, parcel_name) DO UPDATE SET lat=EXCLUDED.lat, lng=EXCLUDED.lng, quadrant=EXCLUDED.quadrant`,
-        [siteId, name, lat, lng, quadrant]
+      const existing = await client.query(
+        `SELECT id FROM parcels WHERE site_id = $1 AND parcel_name = $2 LIMIT 1`,
+        [siteId, name]
       );
+      if (existing.rows.length > 0) {
+        await client.query(
+          `UPDATE parcels SET lat = $1, lng = $2, quadrant = $3 WHERE id = $4`,
+          [lat, lng, quadrant, existing.rows[0].id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO parcels (site_id, parcel_name, lat, lng, quadrant) VALUES ($1,$2,$3,$4,$5)`,
+          [siteId, name, lat, lng, quadrant]
+        );
+      }
     }
 
     // 4. Default admin (bcrypt-hashed) + site assignment
