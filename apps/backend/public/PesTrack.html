@@ -361,9 +361,11 @@ async function exportFindings(){
     }
 
     const date = new Date().toISOString().slice(0,10);
-    const siteObj = (typeof sites !== 'undefined' && sites)
-      ? sites.find(s => s.id === currentSiteId) : null;
-    const siteName = (siteObj && siteObj.name) ? siteObj.name : 'Site';
+    const siteSelect = document.getElementById('site-selector');
+    const siteName = (siteSelect && siteSelect.options.length > 0
+      && siteSelect.options[siteSelect.selectedIndex])
+      ? siteSelect.options[siteSelect.selectedIndex].text.trim()
+      : 'Site';
     const filePrefix = String(siteName).replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'Site';
     const payload = {
       source:'PesTrack_SiteManager', client: siteName,
