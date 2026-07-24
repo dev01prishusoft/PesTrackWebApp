@@ -2517,7 +2517,7 @@ function hideLogin() {
 }
 
 // ── 60-Minute Inactivity Session Expiry (ISSUE-022 & ISSUE-023) ──────
-const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
+const INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'pt_last_activity';
 // Re-fetch findings before S3 PRESIGN_TTL (1h) so photo URLs stay usable
 // when the tab stays open with occasional activity.
@@ -3858,8 +3858,16 @@ async function exportFindingsPDF(sortBy='number'){
     const CAT_ORDER = (window._CATS||[]).map(c=>c.id);
     const ESCALATED_ORDER = ['SOTAICO','Client QA','Client FM','Client Subcontractor RS','Client Subcontractor OC','Client Subcontractor Other','Client Senior Management','Other',''];
 
+    function getParcelStr(loc){
+      if(!loc || !loc.parcel) return 'Unassigned';
+      if(typeof loc.parcel === 'string') return loc.parcel;
+      if(typeof loc.parcel === 'object') return loc.parcel.parcel_name || loc.parcel.name || 'Unassigned';
+      return String(loc.parcel);
+    }
+
     function lastEscalated(loc){
-      for(const v of loc.visits){ if(v.escalated) return v.escalated; }
+      if(!loc || !Array.isArray(loc.visits)) return '';
+      for(const v of loc.visits){ if(v && v.escalated) return v.escalated; }
       return '';
     }
 
@@ -3876,7 +3884,7 @@ async function exportFindingsPDF(sortBy='number'){
 
     function getGroupInfo(loc){
       if(sortBy === 'category'){
-        const catId = loc.visits[0] && loc.visits[0].cat || '';
+        const catId = loc && loc.visits && loc.visits[0] ? loc.visits[0].cat || '' : '';
         const catLabel = CAT_LABELS[catId] || catId || 'Uncategorized';
         return { id: catId || 'uncategorized', label: catLabel };
       } else if(sortBy === 'escalated'){
@@ -3884,7 +3892,8 @@ async function exportFindingsPDF(sortBy='number'){
         return { id: esc, label: esc };
       } else if(sortBy === 'quadrant'){
         const parcelList = window._PARCELS || [];
-        const p = parcelList.find(px => px.name === loc.parcel);
+        const pName = getParcelStr(loc);
+        const p = parcelList.find(px => px.name === pName);
         const q = p ? p.quad : '';
         const quadNames = { NW: 'North West (NW)', NE: 'North East (NE)', SW: 'South West (SW)', SE: 'South East (SE)' };
         const qLabel = quadNames[q] || (q ? `${q} Quadrant` : 'Unassigned Quadrant');
@@ -3896,12 +3905,14 @@ async function exportFindingsPDF(sortBy='number'){
     let sorted;
     if(sortBy === 'category'){
       sorted = [...visibleFindings].sort((a,b)=>{
-        const ca = CAT_ORDER.indexOf(a.visits[0]&&a.visits[0].cat||'');
-        const cb = CAT_ORDER.indexOf(b.visits[0]&&b.visits[0].cat||'');
+        const aCat = a && a.visits && a.visits[0] ? a.visits[0].cat || '' : '';
+        const bCat = b && b.visits && b.visits[0] ? b.visits[0].cat || '' : '';
+        const ca = CAT_ORDER.indexOf(aCat);
+        const cb = CAT_ORDER.indexOf(bCat);
         if(ca !== cb) return (ca<0?99:ca) - (cb<0?99:cb);
         // Secondary sort by parcel
-        const pa = (a.parcel||'Unassigned').toLowerCase();
-        const pb = (b.parcel||'Unassigned').toLowerCase();
+        const pa = getParcelStr(a).toLowerCase();
+        const pb = getParcelStr(b).toLowerCase();
         if(pa !== pb) return pa.localeCompare(pb);
         return (a.refNum||'999') > (b.refNum||'999') ? 1 : -1;
       });
@@ -3912,8 +3923,8 @@ async function exportFindingsPDF(sortBy='number'){
         const ra = ea < 0 ? 99 : ea, rb = eb < 0 ? 99 : eb;
         if(ra !== rb) return ra - rb;
         // Secondary sort by parcel
-        const pa = (a.parcel||'Unassigned').toLowerCase();
-        const pb = (b.parcel||'Unassigned').toLowerCase();
+        const pa = getParcelStr(a).toLowerCase();
+        const pb = getParcelStr(b).toLowerCase();
         if(pa !== pb) return pa.localeCompare(pb);
         return (a.refNum||'999') > (b.refNum||'999') ? 1 : -1;
       });
@@ -3921,16 +3932,16 @@ async function exportFindingsPDF(sortBy='number'){
       const QUAD_ORDER = ['NW','NE','SW','SE'];
       const parcelList = window._PARCELS || [];
       sorted = [...visibleFindings].sort((a,b) => {
-        const pA = parcelList.find(p=>p.name===a.parcel);
-        const pB = parcelList.find(p=>p.name===b.parcel);
+        const pA = parcelList.find(p=>p.name===getParcelStr(a));
+        const pB = parcelList.find(p=>p.name===getParcelStr(b));
         const qA = QUAD_ORDER.indexOf(pA ? pA.quad : '');
         const qB = QUAD_ORDER.indexOf(pB ? pB.quad : '');
         const qAi = qA < 0 ? 99 : qA;
         const qBi = qB < 0 ? 99 : qB;
         if(qAi !== qBi) return qAi - qBi;
         // Secondary sort by parcel within quadrant
-        const pa = (a.parcel||'Unassigned').toLowerCase();
-        const pb = (b.parcel||'Unassigned').toLowerCase();
+        const pa = getParcelStr(a).toLowerCase();
+        const pb = getParcelStr(b).toLowerCase();
         if(pa !== pb) return pa.localeCompare(pb);
         // Tertiary fallback to finding number
         return (a.refNum||'999') > (b.refNum||'999') ? 1 : -1;
