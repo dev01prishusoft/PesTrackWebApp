@@ -37,7 +37,47 @@ async function uploadParcels(req, res, next) {
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    // Header-row detection, matching the standalone client: a sheet may open with
+    // a title or a blank row, so scan the first few rows for the one that names
+    // the columns. sheet_to_json's default (row 1 is always the header) turned
+    // every such sheet into zero parcels with no explanation.
+    const grid = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    if (!grid.length) {
+      return res.status(400).json({ error: 'Uploaded sheet is empty' });
+    }
+
+    const HEADER_SCAN_ROWS = 5;
+    // The client requires a "coord" column; lat/lng are also accepted here
+    // because this endpoint has always supported that layout.
+    const isHeaderRow = (cells) =>
+      cells.some((c) => c.includes('parcel')) &&
+      cells.some((c) => c.includes('coord') || c.includes('lat'));
+
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(grid.length, HEADER_SCAN_ROWS); i++) {
+      if (isHeaderRow(grid[i].map((c) => String(c).toLowerCase()))) { headerIdx = i; break; }
+    }
+    if (headerIdx < 0) {
+      return res.status(400).json({
+        error: 'Could not find a header row — the sheet needs columns: parcel name, coordinate, quadrant',
+      });
+    }
+
+    const headers = grid[headerIdx].map((c) => String(c).toLowerCase().trim());
+    if (!headers.some((h) => h.includes('quad'))) {
+      return res.status(400).json({
+        error: 'Columns not recognised — need: "parcel name", "coordinate", "quadrant"',
+      });
+    }
+
+    // Rebuild the rows as objects keyed by the detected header, so the column
+    // lookup below is unchanged.
+    const data = grid.slice(headerIdx + 1).map((cells) => {
+      const obj = {};
+      headers.forEach((h, i) => { if (h) obj[h] = cells[i] !== undefined ? cells[i] : ''; });
+      return obj;
+    });
 
     if (!data.length) {
       return res.status(400).json({ error: 'Uploaded sheet is empty' });
@@ -55,9 +95,7 @@ async function uploadParcels(req, res, next) {
     const insertedParcels = [];
     const skipped = []; // rows that violated a column length limit
     const quadChanges = [];
-    const coordChanges = []; // a stored point was replaced by a different one
-    const coordAdded = [];   // every stored point kept, sheet supplies extra ones
-    const multiQuadrant = []; // one parcel name carrying several quadrants
+    const coordChanges = [];
     const sheetRowsByName = new Map(); // parcel name -> [{ lat, lng, quad }] from this sheet
 
     // Helper to parse DMS, decimal degrees with hemisphere, or space/comma separated coords
@@ -107,17 +145,23 @@ async function uploadParcels(req, res, next) {
     };
 
     for (const row of data) {
-      // Find keys case-insensitively
-      const findVal = (keys) => {
-        const foundKey = Object.keys(row).find(k => keys.includes(k.toLowerCase().trim()));
-        return foundKey ? row[foundKey] : null;
+      // Find keys case-insensitively. An exact alias match wins; `loose` then
+      // falls back to a substring match the way the client does
+      // (headers.findIndex(h => h.includes('parcel'))), so a heading such as
+      // "Parcel Name (EN)" is still recognised instead of silently yielding null.
+      const findVal = (keys, loose) => {
+        const exact = Object.keys(row).find(k => keys.includes(k.toLowerCase().trim()));
+        if (exact) return row[exact];
+        if (!loose) return null;
+        const partial = Object.keys(row).find(k => k.toLowerCase().includes(loose));
+        return partial ? row[partial] : null;
       };
 
-      const name = findVal(['parcel_name', 'name', 'parcel', 'parcel name']);
+      const name = findVal(['parcel_name', 'name', 'parcel', 'parcel name'], 'parcel');
       const latVal = findVal(['lat', 'latitude', 'lat.', 'y', 'lat(n)', 'latitude(n)', 'point_y']);
       const lngVal = findVal(['lng', 'longitude', 'lng.', 'lon', 'long', 'x', 'lon(e)', 'longitude(e)', 'point_x']);
-      const gpsVal = findVal(['coordinate', 'gps', 'coordinates', 'location', 'lat,long', 'lat,lng', 'gps coordinates']);
-      const quadrant = findVal(['quadrant', 'quad', 'zone']);
+      const gpsVal = findVal(['coordinate', 'gps', 'coordinates', 'location', 'lat,long', 'lat,lng', 'gps coordinates'], 'coord');
+      const quadrant = findVal(['quadrant', 'quad', 'zone'], 'quad');
 
       if (!name || !quadrant) continue; // Skip rows without parcel name or quadrant (matches client standalone HTML)
       if (String(name).length > 100) { skipped.push({ name: String(name).slice(0, 40), reason: 'name too long (max 100)' }); continue; }
@@ -142,6 +186,25 @@ async function uploadParcels(req, res, next) {
 
       const rawCoordStr = gpsVal ? String(gpsVal).trim() : (latVal !== null && lngVal !== null ? `${latVal}, ${lngVal}` : null);
 
+      // A row must carry a usable point on the globe, as in the client's
+      // parseCoordCell — it returns null for an unparseable or out-of-range cell
+      // and the row is dropped. Previously a row whose coordinate failed to parse
+      // was still inserted with lat/lng NULL, giving a parcel that auto-detection
+      // can never match and that shows no marker.
+      const quad = String(quadrant).trim().toUpperCase();
+      const hasPoint =
+        lat != null && lng != null && !isNaN(lat) && !isNaN(lng) &&
+        lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+      if (!hasPoint) {
+        skipped.push({ name: String(name), reason: 'missing or out-of-range coordinate' });
+        continue;
+      }
+
+      // A row repeating an earlier one exactly is kept, not merged: the sheet is
+      // the source of truth for how many rows a parcel has, and the standalone
+      // client stores one entry per row too. The audit snapshot lists every row
+      // for the same reason, so the count and the log agree.
+
       // Names are compared as strings: a numeric-looking cell ("12") arrives from
       // xlsx as a number and would never match the text stored in the column,
       // re-inserting that parcel on every upload.
@@ -152,7 +215,7 @@ async function uploadParcels(req, res, next) {
       // decided one row at a time.
       const nameKey = String(name);
       if (!sheetRowsByName.has(nameKey)) sheetRowsByName.set(nameKey, []);
-      sheetRowsByName.get(nameKey).push({ lat, lng, quad: quadrant != null ? String(quadrant).trim() : '' });
+      sheetRowsByName.get(nameKey).push({ lat, lng, quad });
 
       // Prefer the row with the same name AND the same coordinates — that is the
       // same physical parcel, so the import updates it rather than adding a copy.
@@ -175,78 +238,61 @@ async function uploadParcels(req, res, next) {
                   coordinate = COALESCE($5, coordinate),
                   updated_at = NOW()
             WHERE id = $1 RETURNING *`,
-          [op.id, lat, lng, quadrant, rawCoordStr]
+          [op.id, lat, lng, quad, rawCoordStr]
         );
         parcelRow = rows[0];
       } else {
         const { rows } = await query(
           `INSERT INTO parcels (site_id, parcel_name, coordinate, lat, lng, quadrant, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
-          [siteId, name, rawCoordStr, lat, lng, quadrant]
+          [siteId, name, rawCoordStr, lat, lng, quad]
         );
         parcelRow = rows[0];
       }
       insertedParcels.push(parcelRow);
     }
 
-    // ── Change detection ─────────────────────────────────────────────────
-    // A parcel name holds one row per coordinate, so the sheet and the database
-    // each describe a SET of points per name, and a change is only meaningful
-    // between whole sets. Deciding it per row conflated two different events:
-    // a sheet that MOVES a point, and a sheet that ADDS another point to the
-    // same parcel. Uploading the 46-row sheet and then the 80-row one — which
-    // keeps every original point and only adds more — reported 13 parcels as
-    // "coordinates moved" while nothing had moved.
-    //
-    // So the two are reported as separate things rather than one being folded
-    // into the other:
-    //   moved  — a stored coordinate is GONE and a different one replaced it
-    //   added  — every stored coordinate is still there, the sheet adds more
-    // Both shift auto-detection for new findings, so both are worth showing;
-    // only "moved" means a point the site already surveyed is no longer where
-    // it was. Pure removals stay silent — replace semantics and the kept-in-use
-    // list already cover them.
-    for (const [name, sheetRows] of sheetRowsByName) {
-      const stored = existingParcels.filter((p) => String(p.parcel_name) === name);
-      if (!stored.length) continue; // brand-new parcel, nothing to compare against
-
-      const storedPts = stored.filter((p) => p.lat != null && p.lng != null);
-      const sheetPts = sheetRows.filter((r) => r.lat != null && r.lng != null);
-      if (storedPts.length && sheetPts.length) {
-        const inSheet = (p) => sheetPts.some((r) => sameCoord(p.lat, r.lat) && sameCoord(p.lng, r.lng));
-        const inStored = (r) => storedPts.some((p) => sameCoord(p.lat, r.lat) && sameCoord(p.lng, r.lng));
-        const lost = storedPts.filter((p) => !inSheet(p));
-        const gained = sheetPts.filter((r) => !inStored(r));
-        // One entry per affected POINT, not per parcel: a parcel that gained four
-        // coordinates is listed four times. The list is a per-point record of what
-        // the sheet did, matching the standalone client's output.
-        if (lost.length && gained.length) {
-          gained.forEach(() => coordChanges.push(`"${name}"`));
-        } else if (gained.length) {
-          gained.forEach(() => coordAdded.push(`"${name}"`));
-        }
-      }
-
-      // Same rule for quadrants: a parcel that keeps its quadrant and merely
-      // gains a row in another one has not been reassigned.
-      const storedQuads = [...new Set(stored.map((p) => (p.quadrant != null ? String(p.quadrant).trim() : '')).filter(Boolean))];
-      const sheetQuads = [...new Set(sheetRows.map((r) => r.quad).filter(Boolean))];
-      if (storedQuads.length && sheetQuads.length) {
-        const lostQuads = storedQuads.filter((q) => !sheetQuads.includes(q));
-        if (lostQuads.length) {
-          quadChanges.push(`"${name}": ${lostQuads.join('/')} → ${sheetQuads.join('/')}`);
-        }
-      }
+    // Every row failed validation. Refusing here rather than carrying on keeps a
+    // malformed sheet from being reported as a successful upload, and mirrors
+    // the client's "No valid parcel rows found in file". Nothing was written,
+    // because each row was skipped before its INSERT/UPDATE.
+    if (!insertedParcels.length) {
+      return res.status(400).json({ error: 'No valid parcel rows found in file', skipped });
     }
 
-    // ── Sheet self-consistency: one parcel name, several quadrants ───────
-    // Unlike the checks above this compares the sheet against itself, not
-    // against history, so it fires on a first upload too. A finding on such a
-    // parcel has no single quadrant to group under in the PDF, and the parcel's
-    // rows disagree about where it belongs.
+    // ── Change detection ─────────────────────────────────────────────────
+    // The standalone client's algorithm, unchanged, with the previous parcel
+    // list coming from the database instead of localStorage:
+    //
+    //   newParcels.forEach(np => {
+    //     const op = prevParcels.find(p => p.name === np.name);
+    //     if (op.quad !== np.quad)      quadChanges.push(`"name": old → new`);
+    //     else if (moved > 0.0001)      coordChanges.push(`"name"`);
+    //   });
+    //
+    // Both sides must be in sheet-row order for this to mean anything, which is
+    // why it runs here rather than in the browser: `existingParcels` is loaded
+    // ORDER BY created_at, id — insertion order, i.e. the row order of the sheet
+    // that produced it — and the loop below walks the new sheet in its own order.
+    // The browser only ever sees the reloaded list sorted by name, where "the
+    // first row of this parcel" is a different row than the sheet's first.
+    //
+    // One entry per sheet row, so a parcel matching several rows is listed
+    // several times, exactly as the client lists it.
     for (const [name, sheetRows] of sheetRowsByName) {
-      const quads = [...new Set(sheetRows.map((r) => r.quad).filter(Boolean))];
-      if (quads.length > 1) multiQuadrant.push(`"${name}": ${quads.join(', ')}`);
+      const op = existingParcels.find((p) => String(p.parcel_name) === name);
+      if (!op) continue; // brand-new parcel, nothing to compare against
+      const opQuad = op.quadrant != null ? String(op.quadrant).trim().toUpperCase() : '';
+
+      for (const r of sheetRows) {
+        if (opQuad !== r.quad) {
+          quadChanges.push(`"${name}": ${opQuad || 'None'} → ${r.quad || 'None'}`);
+        } else if (op.lat != null && op.lng != null && r.lat != null && r.lng != null) {
+          const dLat = Math.abs(Number(op.lat) - r.lat);
+          const dLng = Math.abs(Number(op.lng) - r.lng);
+          if (dLat > 0.0001 || dLng > 0.0001) coordChanges.push(`"${name}"`);
+        }
+      }
     }
 
     // Sheet order is arbitrary, so group each parcel's entries together by name.
@@ -256,8 +302,6 @@ async function uploadParcels(req, res, next) {
       a.replace(/"/g, '').localeCompare(b.replace(/"/g, ''), undefined, { sensitivity: 'base' });
     quadChanges.sort(byName);
     coordChanges.sort(byName);
-    coordAdded.sort(byName);
-    multiQuadrant.sort(byName);
 
     // ── Replace semantics ────────────────────────────────────────────────
     // The uploaded sheet defines the COMPLETE parcel set for the site (per the
@@ -319,18 +363,21 @@ async function uploadParcels(req, res, next) {
     // coordinates — before and after, so the two panes of the audit viewer read
     // as a diff. Postgres returns numerics as strings, so lat/lng are coerced to
     // numbers; otherwise an unchanged coordinate would render as "27.4" on one
-    // side and 27.4 on the other. Fully identical rows collapse to one entry.
+    // side and 27.4 on the other.
+    //
+    // Every stored row is listed, including ones identical to another. Collapsing
+    // identical rows hid the only thing that distinguished them — that there are
+    // two — so a sheet whose extra row added a parcel was logged as "changed:
+    // false" against a snapshot that looked untouched, while the response
+    // reported one more parcel than the audit could account for.
     const toParcelSnapshot = (rows) => {
-      const seen = new Map();
-      for (const p of rows) {
-        const name = p.parcel_name == null ? '' : String(p.parcel_name);
-        const quadrant = p.quadrant == null ? null : String(p.quadrant);
-        const lat = p.lat != null ? Number(p.lat) : null;
-        const lng = p.lng != null ? Number(p.lng) : null;
-        const key = `${name}|${quadrant}|${lat}|${lng}`;
-        if (!seen.has(key)) seen.set(key, { parcel_name: name, quadrant, lat, lng });
-      }
-      return [...seen.values()].sort(
+      const out = rows.map((p) => ({
+        parcel_name: p.parcel_name == null ? '' : String(p.parcel_name),
+        quadrant: p.quadrant == null ? null : String(p.quadrant),
+        lat: p.lat != null ? Number(p.lat) : null,
+        lng: p.lng != null ? Number(p.lng) : null,
+      }));
+      return out.sort(
         (a, b) =>
           a.parcel_name.localeCompare(b.parcel_name) ||
           String(a.quadrant).localeCompare(String(b.quadrant)) ||
@@ -377,8 +424,6 @@ async function uploadParcels(req, res, next) {
       skipped,
       quadChanges,
       coordChanges,
-      coordAdded,
-      multiQuadrant,
       removed,
       keptInUse,
     });
