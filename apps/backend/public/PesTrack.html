@@ -751,8 +751,6 @@ function importParcelsXlsx(input){
   if(!file){ return; }
   if (requireSite()) { input.value = ''; return; }
 
-  const prevParcels = (window._PARCELS || []).map(p => ({ ...p }));
-
   showNotif('⏳ Uploading parcel list...', false, 0);
   const formData = new FormData();
   formData.append('file', file);
@@ -771,30 +769,19 @@ function importParcelsXlsx(input){
   })
   .then(data => {
     loadParcels().then(() => {
-      const quadChanges = [];
-      const coordChanges = [];
-
-      if (prevParcels && prevParcels.length) {
-        const newParcels = window._PARCELS || [];
-        newParcels.forEach(np => {
-          const op = prevParcels.find(p => p.name === np.name);
-          if (!op || (op.name && op.name.includes('General'))) return;
-          if (op.quad !== np.quad) {
-            quadChanges.push(`"${np.name}": ${op.quad || 'None'} → ${np.quad || 'None'}`);
-          } else if (op.lat != null && op.lng != null && np.lat != null && np.lng != null) {
-            const dLat = Math.abs(op.lat - np.lat), dLng = Math.abs(op.lng - np.lng);
-            if (dLat > 0.0001 || dLng > 0.0001) {
-              coordChanges.push(`"${np.name}"`);
-            }
-          }
-        });
-      }
-
+      // The change lists come from the server, which compares the sheet's full set
+      // of points per parcel name against the stored set. Recomputing them here
+      // compared row-by-row against the first stored row only, which could not tell
+      // a moved point from an added one — a name holding several coordinates
+      // ("Nines" holds five) was reported as moved on every re-upload.
+      const quadChanges = (data && Array.isArray(data.quadChanges)) ? data.quadChanges : [];
+      const coordChanges = (data && Array.isArray(data.coordChanges)) ? data.coordChanges : [];
+      const coordAdded = (data && Array.isArray(data.coordAdded)) ? data.coordAdded : [];
       // Kept-in-use comes from the server (replace semantics). Removed parcels are
       // not reported to the user.
       const keptInUse = (data && Array.isArray(data.keptInUse)) ? data.keptInUse : [];
 
-      if (quadChanges.length || coordChanges.length || keptInUse.length) {
+      if (quadChanges.length || coordChanges.length || coordAdded.length || keptInUse.length) {
         const notifEl = document.getElementById('notif');
         if (notifEl) notifEl.style.display = 'none';
 
@@ -810,6 +797,10 @@ function importParcelsXlsx(input){
         if (coordChanges.length) {
           html += `<p style="font-size:.75rem;font-weight:700;color:#1D4ED8;margin-bottom:4px">ℹ️ Coordinates moved (affects auto-detection for new findings only):</p>`;
           html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px;max-height:260px;overflow-y:auto">${coordChanges.map(c => `<li>${c}</li>`).join('')}</ul>`;
+        }
+        if (coordAdded.length) {
+          html += `<p style="font-size:.75rem;font-weight:700;color:#047857;margin-bottom:4px">➕ Coordinates added (existing points kept; affects auto-detection for new findings only):</p>`;
+          html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px;max-height:260px;overflow-y:auto">${coordAdded.map(c => `<li>${c}</li>`).join('')}</ul>`;
         }
         if (quadChanges.length) {
           html += `<p style="font-size:.72rem;color:#6B7280">Existing findings keep their assigned parcel name. Their quadrant in the PDF now reflects the updated quadrant above.</p>`;
