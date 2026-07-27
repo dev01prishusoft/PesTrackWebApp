@@ -53,6 +53,9 @@ export interface AuditLog {
   id: number;
   user_id: number | null;
   username: string | null;
+  // Null for actions not scoped to a site (login, user administration).
+  site_id: string | null;
+  site_name: string | null;
   action: string;
   table_name: string;
   record_id: string | null;

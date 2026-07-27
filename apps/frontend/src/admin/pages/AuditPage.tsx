@@ -5,7 +5,7 @@ import { DataTable } from '../components/DataTable';
 import { SearchInput } from '../components/SearchInput';
 import { PayloadModal } from '../components/PayloadModal';
 import { useListState } from '../hooks/useListState';
-import { useAudit } from '../api/queries';
+import { useAudit, useSites } from '../api/queries';
 import { cn } from '../lib/utils';
 import type { AuditLog } from '../lib/types';
 
@@ -23,13 +23,17 @@ export function AuditPage() {
   const [action, setAction] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [siteId, setSiteId] = useState('');
   const [payloadRow, setPayloadRow] = useState<AuditLog | null>(null);
   const { data, isFetching, isError, error } = useAudit({
     ...ls.params,
     action: action || undefined,
     from: from || undefined,
     to: to || undefined,
+    siteId: siteId || undefined,
   });
+  // Every site in one page — the dropdown lists them all rather than paginating.
+  const { data: sitesData } = useSites({ page: 1, limit: 500, sort: 'name', order: 'asc' });
 
   const columns = useMemo<ColumnDef<AuditLog, unknown>[]>(() => [
     { id: 'a.created_at', header: 'When', accessorFn: (l) => new Date(l.created_at).toLocaleString() },
@@ -43,6 +47,17 @@ export function AuditPage() {
       ),
     },
     { id: 'a.table_name', header: 'Table', accessorKey: 'table_name' },
+    {
+      // The site name is what identifies a row at a glance; the id is kept on the
+      // tooltip for cross-referencing. Rows not scoped to a site (login, user
+      // admin) carry neither.
+      id: 's.name', header: 'Site',
+      cell: ({ row }) => {
+        const { site_name, site_id } = row.original;
+        if (!site_id) return <span className="text-muted-foreground">—</span>;
+        return <span title={site_id}>{site_name || site_id}</span>;
+      },
+    },
     {
       id: 'changes', header: 'Changes', enableSorting: false,
       cell: ({ row }) => {
@@ -70,7 +85,7 @@ export function AuditPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:flex-wrap">
         {/* Row 1 on mobile: search + action side by side */}
         <div className="flex items-center gap-2 sm:contents">
-          <SearchInput value={ls.search} onChange={ls.changeSearch} placeholder="Search table, record, user…" />
+          <SearchInput value={ls.search} onChange={ls.changeSearch} placeholder="Search table, record, user, site…" />
           <select className={cn(selectCls, 'flex-1 min-w-[120px] sm:flex-none')} value={action} onChange={(e) => { setAction(e.target.value); ls.setPage(1); }}>
             <option value="">All actions</option>
             <option value="CREATE">CREATE</option>
@@ -78,6 +93,16 @@ export function AuditPage() {
             <option value="DELETE">DELETE</option>
           </select>
         </div>
+        <select
+          className={cn(selectCls, 'min-w-[140px]')}
+          value={siteId}
+          onChange={(e) => { setSiteId(e.target.value); ls.setPage(1); }}
+        >
+          <option value="">All sites</option>
+          {(sitesData?.data ?? []).map((s) => (
+            <option key={s.id} value={String(s.id)}>{s.name}</option>
+          ))}
+        </select>
         {/* Row 2 on mobile: start + end date side by side */}
         <div className="flex items-center gap-2 sm:contents">
           <input className={cn(selectCls, 'flex-1 min-w-0 sm:flex-none')} type="date" value={from} onChange={(e) => { setFrom(e.target.value); ls.setPage(1); }} />

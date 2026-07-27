@@ -57,6 +57,7 @@ async function uploadParcels(req, res, next) {
     const quadChanges = [];
     const coordChanges = []; // a stored point was replaced by a different one
     const coordAdded = [];   // every stored point kept, sheet supplies extra ones
+    const multiQuadrant = []; // one parcel name carrying several quadrants
     const sheetRowsByName = new Map(); // parcel name -> [{ lat, lng, quad }] from this sheet
 
     // Helper to parse DMS, decimal degrees with hemisphere, or space/comma separated coords
@@ -238,6 +239,16 @@ async function uploadParcels(req, res, next) {
       }
     }
 
+    // ── Sheet self-consistency: one parcel name, several quadrants ───────
+    // Unlike the checks above this compares the sheet against itself, not
+    // against history, so it fires on a first upload too. A finding on such a
+    // parcel has no single quadrant to group under in the PDF, and the parcel's
+    // rows disagree about where it belongs.
+    for (const [name, sheetRows] of sheetRowsByName) {
+      const quads = [...new Set(sheetRows.map((r) => r.quad).filter(Boolean))];
+      if (quads.length > 1) multiQuadrant.push(`"${name}": ${quads.join(', ')}`);
+    }
+
     // Sheet order is arbitrary, so group each parcel's entries together by name.
     // Sorted on the bare name: the surrounding quotes would otherwise outrank the
     // space in a name and file "Cyan the Range" ahead of "Cyan".
@@ -246,6 +257,7 @@ async function uploadParcels(req, res, next) {
     quadChanges.sort(byName);
     coordChanges.sort(byName);
     coordAdded.sort(byName);
+    multiQuadrant.sort(byName);
 
     // ── Replace semantics ────────────────────────────────────────────────
     // The uploaded sheet defines the COMPLETE parcel set for the site (per the
@@ -366,6 +378,7 @@ async function uploadParcels(req, res, next) {
       quadChanges,
       coordChanges,
       coordAdded,
+      multiQuadrant,
       removed,
       keptInUse,
     });

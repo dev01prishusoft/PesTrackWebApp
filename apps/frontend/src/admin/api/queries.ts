@@ -120,7 +120,7 @@ export function useDeleteSite() {
 
 // ---------- Audit ----------
 export function useAudit(
-  params: ListParams & { action?: string; from?: string; to?: string }
+  params: ListParams & { action?: string; from?: string; to?: string; siteId?: string }
 ) {
   return useQuery({
     queryKey: ['admin_audit', params],
