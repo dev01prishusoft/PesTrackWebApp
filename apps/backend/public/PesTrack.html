@@ -790,11 +790,19 @@ function importParcelsXlsx(input){
         });
       }
 
-      if (quadChanges.length || coordChanges.length) {
+      // Kept-in-use comes from the server (replace semantics). Removed parcels are
+      // not reported to the user.
+      const keptInUse = (data && Array.isArray(data.keptInUse)) ? data.keptInUse : [];
+
+      if (quadChanges.length || coordChanges.length || keptInUse.length) {
         const notifEl = document.getElementById('notif');
         if (notifEl) notifEl.style.display = 'none';
 
         let html = `<p style="margin-bottom:10px;font-size:.82rem;color:#374151">Parcels updated successfully. Some existing parcels have changed:</p>`;
+        if (keptInUse.length) {
+          html += `<p style="font-size:.75rem;font-weight:700;color:#B45309;margin-bottom:4px">📌 Kept (not in the sheet, but still assigned to existing findings):</p>`;
+          html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px;max-height:260px;overflow-y:auto">${keptInUse.map(c => `<li>"${c}"</li>`).join('')}</ul>`;
+        }
         if (quadChanges.length) {
           html += `<p style="font-size:.75rem;font-weight:700;color:#B45309;margin-bottom:4px">⚠️ Quadrant changed (affects existing findings' quadrant grouping in PDF):</p>`;
           html += `<ul style="font-size:.73rem;color:#374151;margin:0 0 10px 14px;max-height:260px;overflow-y:auto">${quadChanges.map(c => `<li>${c}</li>`).join('')}</ul>`;

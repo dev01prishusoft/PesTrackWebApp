@@ -35,6 +35,28 @@ function JsonPanel({ values }: { values: Values }) {
   );
 }
 
+// Shown instead of the new-value JSON when the server flagged the update as a
+// no-op. Repeating a payload identical to the old side just invites the reader
+// to hunt for a difference that isn't there.
+function NoChangesPanel() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-1.5 p-6 text-center">
+      <span className="text-sm font-semibold text-foreground">No changes</span>
+      <span className="text-xs text-muted-foreground max-w-[220px]">
+        This update saved the record without modifying any field.
+      </span>
+    </div>
+  );
+}
+
+// `changed` / `changedFields` are audit metadata stamped on by the server, not
+// part of the record — surfaced in the header instead of the JSON body.
+function stripMeta(values: Values): Values {
+  if (!values) return values;
+  const { changed: _changed, changedFields: _changedFields, ...rest } = values;
+  return rest;
+}
+
 export function PayloadModal({
   title,
   oldValues,
@@ -46,8 +68,15 @@ export function PayloadModal({
   newValues: Values;
   onClose: () => void;
 }) {
-  const oldJson = JSON.stringify(oldValues ?? {}, null, 2);
-  const newJson = JSON.stringify(newValues ?? {}, null, 2);
+  const changed = typeof newValues?.changed === 'boolean' ? newValues.changed : null;
+  const changedFields = Array.isArray(newValues?.changedFields)
+    ? (newValues.changedFields as unknown[]).map(String)
+    : [];
+
+  const oldBody = stripMeta(oldValues);
+  const newBody = stripMeta(newValues);
+  const oldJson = JSON.stringify(oldBody ?? {}, null, 2);
+  const newJson = JSON.stringify(newBody ?? {}, null, 2);
 
   return (
     <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-[60] px-4">
@@ -66,15 +95,22 @@ export function PayloadModal({
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Old value</span>
               <CopyButton text={oldJson} />
             </div>
-            <JsonPanel values={oldValues} />
+            <JsonPanel values={oldBody} />
           </div>
           {/* NEW */}
           <div className="bg-card flex flex-col min-h-0">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New value</span>
+            <div className="flex items-center gap-2 justify-between px-3 py-2 border-b border-border bg-muted/30">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
+                New value
+                {changedFields.length > 0 && (
+                  <span className="ml-2 normal-case font-medium text-foreground/70">
+                    {changedFields.join(', ')}
+                  </span>
+                )}
+              </span>
               <CopyButton text={newJson} />
             </div>
-            <JsonPanel values={newValues} />
+            {changed === false ? <NoChangesPanel /> : <JsonPanel values={newBody} />}
           </div>
         </div>
       </div>

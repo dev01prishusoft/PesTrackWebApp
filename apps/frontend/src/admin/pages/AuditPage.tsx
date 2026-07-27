@@ -18,22 +18,6 @@ const ACTION_STYLES: Record<string, string> = {
   DELETE: 'bg-destructive/15 text-destructive',
 };
 
-// Internal columns that are noise in a changes view.
-const IGNORED_FIELDS = new Set(['id', 'updated_at', 'created_at', 'slug']);
-
-// Count the top-level fields that actually changed between old and new.
-function changedFields(l: AuditLog): { length: number } {
-  const oldV = l.old_values ?? {};
-  const newV = l.new_values ?? {};
-  const keys = new Set([...Object.keys(oldV), ...Object.keys(newV)]);
-  let n = 0;
-  for (const k of keys) {
-    if (IGNORED_FIELDS.has(k)) continue;
-    if (JSON.stringify(oldV[k] ?? null) !== JSON.stringify(newV[k] ?? null)) n++;
-  }
-  return { length: n };
-}
-
 export function AuditPage() {
   const ls = useListState({ sort: 'a.created_at', order: 'desc' });
   const [action, setAction] = useState('');
@@ -65,7 +49,6 @@ export function AuditPage() {
         const l = row.original;
         const hasPayload = !!(l.old_values || l.new_values);
         if (!hasPayload) return <span className="text-muted-foreground">—</span>;
-        const n = changedFields(l).length;
         return (
           <button
             type="button"
@@ -74,7 +57,7 @@ export function AuditPage() {
             title="View old / new payload"
           >
             <FileJson size={14} />
-            Payload{l.action === 'UPDATE' && n > 0 ? ` (${n})` : ''}
+            Payload
           </button>
         );
       },

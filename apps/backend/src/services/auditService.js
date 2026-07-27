@@ -46,9 +46,42 @@ async function resolveAuditValues(values) {
   return out;
 }
 
+// Bookkeeping columns that move on every write. Comparing them would make an
+// update that changed nothing of substance look like a real edit.
+const VOLATILE_FIELDS = new Set(['updated_at', 'created_at']);
+
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+// JSON with object keys sorted, so two payloads assembled in a different key
+// order still compare equal. Array order is preserved on purpose — for a photo
+// list the order is part of the value.
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`)
+    .join(',')}}`;
+}
+
+// Names of the fields that actually differ between the two sides.
+function diffFields(oldValues, newValues) {
+  const keys = new Set([...Object.keys(oldValues), ...Object.keys(newValues)]);
+  const changed = [];
+  for (const key of keys) {
+    if (VOLATILE_FIELDS.has(key)) continue;
+    if (stableStringify(oldValues[key]) !== stableStringify(newValues[key])) changed.push(key);
+  }
+  return changed.sort();
+}
+
 /**
  * Writes an immutable audit row. Mandatory fields per brief: who / what / when / IP.
  * Field-level old/new values are optional (pass when available).
+ *
+ * Any UPDATE that carries both sides also gets `changed` / `changedFields`
+ * stamped onto its new_values, so a save that wrote nothing is visible at a
+ * glance instead of having to diff two JSON blobs by eye.
  */
 async function logAction({
   req,
@@ -64,6 +97,16 @@ async function logAction({
   const ip = rawIp.replace(/^::ffff:/, '') || null;
   const userAgent = (req.headers && req.headers['user-agent']) || null;
 
+  // The two flags are listed first so they head the payload, then reassigned
+  // after the spread so a caller's own `changed` key can never shadow them.
+  let newValuesOut = newValues;
+  if (action === 'UPDATE' && isPlainObject(oldValues) && isPlainObject(newValues)) {
+    const changedFields = diffFields(oldValues, newValues);
+    newValuesOut = { changed: null, changedFields: null, ...newValues };
+    newValuesOut.changed = changedFields.length > 0;
+    newValuesOut.changedFields = changedFields;
+  }
+
   await query(
     `INSERT INTO audit_logs
        (user_id, site_id, action, table_name, record_id, old_values, new_values, ip_address, user_agent)
@@ -75,7 +118,7 @@ async function logAction({
       tableName,
       recordId != null ? String(recordId) : null,
       oldValues ? JSON.stringify(oldValues) : null,
-      newValues ? JSON.stringify(newValues) : null,
+      newValuesOut ? JSON.stringify(newValuesOut) : null,
       ip,
       userAgent,
     ]

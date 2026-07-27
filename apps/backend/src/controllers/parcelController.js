@@ -38,9 +38,11 @@ async function uploadParcels(req, res, next) {
       return res.status(400).json({ error: 'Uploaded sheet is empty' });
     }
 
-    // Fetch existing parcels to track quad/coord updates for warnings in deterministic order
+    // Fetch existing parcels to track quad/coord updates for warnings in deterministic order.
+    // Selects the whole row so a parcel matched as an exact duplicate below can be
+    // returned in the response untouched, without re-reading it.
     const { rows: existingParcels } = await query(
-      'SELECT id, parcel_name, lat, lng, quadrant FROM parcels WHERE site_id = $1 ORDER BY created_at ASC, id ASC',
+      'SELECT * FROM parcels WHERE site_id = $1 ORDER BY created_at ASC, id ASC',
       [siteId]
     );
     const usedParcelIds = new Set();
@@ -84,6 +86,16 @@ async function uploadParcels(req, res, next) {
 
       const parsed = parseFloat(s);
       return isNaN(parsed) ? null : parsed;
+    };
+
+    // Coordinates are stored as numerics and come back from Postgres as strings,
+    // so compare numerically with a tolerance rather than by equality. 1e-6 deg
+    // is ~0.1 m — below the precision the sheets actually carry (6 decimals),
+    // so this only ever matches coordinates meant to be the same point.
+    const sameCoord = (a, b) => {
+      if (a == null && b == null) return true;
+      if (a == null || b == null) return false;
+      return Math.abs(Number(a) - Number(b)) < 1e-6;
     };
 
     for (const row of data) {
@@ -141,8 +153,20 @@ async function uploadParcels(req, res, next) {
         }
       }
 
-      // Find an unused existing parcel record matching this parcel name to update, or insert new
-      const op = existingParcels.find(p => p.parcel_name === name && !usedParcelIds.has(p.id));
+      // Names are compared as strings: a numeric-looking cell ("12") arrives from
+      // xlsx as a number and would never match the text stored in the column,
+      // re-inserting that parcel on every upload.
+      const sameName = (p) => String(p.parcel_name) === String(name);
+
+      // Prefer the row with the same name AND the same coordinates — that is the
+      // same physical parcel, so the import updates it rather than adding a copy.
+      // Falling back to any unused row with this name covers a parcel whose
+      // coordinates the sheet has moved.
+      const op =
+        existingParcels.find(
+          (p) => sameName(p) && !usedParcelIds.has(p.id) &&
+                 sameCoord(p.lat, lat) && sameCoord(p.lng, lng)
+        ) || existingParcels.find(p => sameName(p) && !usedParcelIds.has(p.id));
 
       let parcelRow;
       if (op) {
@@ -169,6 +193,45 @@ async function uploadParcels(req, res, next) {
       insertedParcels.push(parcelRow);
     }
 
+    // ── Replace semantics ────────────────────────────────────────────────
+    // The uploaded sheet defines the COMPLETE parcel set for the site (per the
+    // brief: "upload replaces the site's parcel set"). Any existing parcel we did
+    // not touch during this upload is no longer in the sheet and is removed —
+    // EXCEPT parcels still referenced by a finding, which we keep so their
+    // findings stay intact (locations.parcel_id has no ON DELETE cascade).
+    // Guarded by insertedParcels.length so an empty/all-invalid upload can never
+    // wipe the existing set.
+    const removed = [];
+    const keptInUse = [];
+    if (insertedParcels.length > 0) {
+      const staleIds = existingParcels
+        .filter((p) => !usedParcelIds.has(p.id))
+        .map((p) => p.id);
+
+      if (staleIds.length) {
+        // Which stale parcels are still referenced by a finding on this site?
+        const { rows: refRows } = await query(
+          `SELECT DISTINCT parcel_id FROM locations
+            WHERE site_id = $1 AND parcel_id = ANY($2::uuid[])`,
+          [siteId, staleIds]
+        );
+        const referenced = new Set(refRows.map((r) => r.parcel_id));
+        const deletableIds = staleIds.filter((id) => !referenced.has(id));
+
+        if (deletableIds.length) {
+          const { rows: delRows } = await query(
+            `DELETE FROM parcels WHERE id = ANY($1::uuid[]) RETURNING parcel_name`,
+            [deletableIds]
+          );
+          removed.push(...delRows.map((r) => r.parcel_name));
+        }
+        // Parcels we could NOT remove because findings still use them.
+        for (const p of existingParcels) {
+          if (referenced.has(p.id)) keptInUse.push(p.parcel_name);
+        }
+      }
+    }
+
     // Auto-map any unassigned finding locations for this site to their nearest parcel
     await query(
       `UPDATE locations l
@@ -184,24 +247,72 @@ async function uploadParcels(req, res, next) {
       [siteId]
     );
 
+    // ── Audit payload ────────────────────────────────────────────────────
+    // A bare "Uploaded N parcels" message made it impossible to see what the
+    // upload actually did. Log the site's parcel list — name, quadrant and
+    // coordinates — before and after, so the two panes of the audit viewer read
+    // as a diff. Postgres returns numerics as strings, so lat/lng are coerced to
+    // numbers; otherwise an unchanged coordinate would render as "27.4" on one
+    // side and 27.4 on the other. Fully identical rows collapse to one entry.
+    const toParcelSnapshot = (rows) => {
+      const seen = new Map();
+      for (const p of rows) {
+        const name = p.parcel_name == null ? '' : String(p.parcel_name);
+        const quadrant = p.quadrant == null ? null : String(p.quadrant);
+        const lat = p.lat != null ? Number(p.lat) : null;
+        const lng = p.lng != null ? Number(p.lng) : null;
+        const key = `${name}|${quadrant}|${lat}|${lng}`;
+        if (!seen.has(key)) seen.set(key, { parcel_name: name, quadrant, lat, lng });
+      }
+      return [...seen.values()].sort(
+        (a, b) =>
+          a.parcel_name.localeCompare(b.parcel_name) ||
+          String(a.quadrant).localeCompare(String(b.quadrant)) ||
+          (a.lat ?? 0) - (b.lat ?? 0) ||
+          (a.lng ?? 0) - (b.lng ?? 0)
+      );
+    };
+
+    // Re-read the parcel set so the "new" side reflects the deletions above,
+    // not just the rows this upload touched.
+    const { rows: finalParcels } = await query(
+      'SELECT parcel_name, quadrant, lat, lng FROM parcels WHERE site_id = $1',
+      [siteId]
+    );
+
     await logAction({
       req,
       action: 'UPDATE',
-      tableName: 'sites',
-      recordId: siteId,
+      // The upload rewrites many parcel rows at once, so there is no single
+      // parcel to point at. Named after the table it actually changes, with the
+      // site as the scope — same `site:<id>` convention the bulk finding clear uses.
+      tableName: 'parcels',
+      recordId: `site:${siteId}`,
       siteId,
-      newValues: { message: `Uploaded ${insertedParcels.length} parcels` }
+      oldValues: { parcels: toParcelSnapshot(existingParcels) },
+      newValues: { parcels: toParcelSnapshot(finalParcels) },
     });
 
-    res.json({
-      message: skipped.length
+    // Human-readable summary covering processed / skipped / removed / kept.
+    const parts = [
+      skipped.length
         ? `Processed ${insertedParcels.length} parcels. Skipped ${skipped.length} invalid row(s).`
         : `Successfully processed ${insertedParcels.length} parcels.`,
+    ];
+    if (removed.length) parts.push(`Removed ${removed.length} parcel(s) no longer in the sheet.`);
+    if (keptInUse.length) {
+      parts.push(`Kept ${keptInUse.length} parcel(s) not in the sheet because findings still reference them.`);
+    }
+
+    res.json({
+      message: parts.join(' '),
       parcels: insertedParcels,
       totalRows: insertedParcels.length,
       skipped,
       quadChanges,
       coordChanges,
+      removed,
+      keptInUse,
     });
   } catch (err) {
     console.error('Error uploading parcel XLSX:', err);
