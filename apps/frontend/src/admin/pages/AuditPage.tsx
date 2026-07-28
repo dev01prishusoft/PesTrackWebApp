@@ -18,6 +18,11 @@ const ACTION_STYLES: Record<string, string> = {
   DELETE: 'bg-destructive/15 text-destructive',
 };
 
+// Display label only — the action stored in audit_logs is still UPDATE, so
+// existing rows, the API filter and any external reader are unaffected.
+const ACTION_LABELS: Record<string, string> = { UPDATE: 'VIEW' };
+const actionLabel = (a: string) => ACTION_LABELS[a] ?? a;
+
 export function AuditPage() {
   const ls = useListState({ sort: 'a.created_at', order: 'desc' });
   const [action, setAction] = useState('');
@@ -42,7 +47,7 @@ export function AuditPage() {
       id: 'a.action', header: 'Action',
       cell: ({ row }) => (
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ACTION_STYLES[row.original.action] ?? 'bg-muted text-muted-foreground'}`}>
-          {row.original.action}
+          {actionLabel(row.original.action)}
         </span>
       ),
     },
@@ -89,7 +94,8 @@ export function AuditPage() {
           <select className={cn(selectCls, 'flex-1 min-w-[120px] sm:flex-none')} value={action} onChange={(e) => { setAction(e.target.value); ls.setPage(1); }}>
             <option value="">All actions</option>
             <option value="CREATE">CREATE</option>
-            <option value="UPDATE">UPDATE</option>
+            {/* value stays UPDATE — that is what the API filters on */}
+            <option value="UPDATE">VIEW</option>
             <option value="DELETE">DELETE</option>
           </select>
         </div>
@@ -123,7 +129,7 @@ export function AuditPage() {
 
       {payloadRow && (
         <PayloadModal
-          title={`${payloadRow.action} · ${payloadRow.table_name}`}
+          title={`${actionLabel(payloadRow.action)} · ${payloadRow.table_name}`}
           oldValues={payloadRow.old_values}
           newValues={payloadRow.new_values}
           onClose={() => setPayloadRow(null)}
