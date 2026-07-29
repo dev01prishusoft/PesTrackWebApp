@@ -69,9 +69,7 @@ export function PayloadModal({
   onClose: () => void;
 }) {
   const changed = typeof newValues?.changed === 'boolean' ? newValues.changed : null;
-  const changedFields = Array.isArray(newValues?.changedFields)
-    ? (newValues.changedFields as unknown[]).map(String)
-    : [];
+
 
   const oldBody = stripMeta(oldValues);
   const newBody = stripMeta(newValues);
@@ -102,11 +100,6 @@ export function PayloadModal({
             <div className="flex items-center gap-2 justify-between px-3 py-2 border-b border-border bg-muted/30">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
                 New value
-                {changedFields.length > 0 && (
-                  <span className="ml-2 normal-case font-medium text-foreground/70">
-                    {changedFields.join(', ')}
-                  </span>
-                )}
               </span>
               <CopyButton text={newJson} />
             </div>

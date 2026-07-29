@@ -99,12 +99,28 @@ async function logAction({
 
   // The two flags are listed first so they head the payload, then reassigned
   // after the spread so a caller's own `changed` key can never shadow them.
+  let oldValuesOut = oldValues;
   let newValuesOut = newValues;
   if (action === 'UPDATE' && isPlainObject(oldValues) && isPlainObject(newValues)) {
     const changedFields = diffFields(oldValues, newValues);
-    newValuesOut = { changed: null, changedFields: null, ...newValues };
-    newValuesOut.changed = changedFields.length > 0;
-    newValuesOut.changedFields = changedFields;
+    const filteredOld = {};
+    const filteredNew = {};
+    for (const key of changedFields) {
+      if (key in oldValues) filteredOld[key] = oldValues[key];
+      if (key in newValues) filteredNew[key] = newValues[key];
+    }
+    if ('ref_num' in oldValues) {
+      filteredOld.ref_num = oldValues.ref_num;
+    }
+    if ('ref_num' in newValues) {
+      filteredNew.ref_num = newValues.ref_num;
+    }
+    oldValuesOut = filteredOld;
+    newValuesOut = {
+      changed: changedFields.length > 0,
+      changedFields,
+      ...filteredNew
+    };
   }
 
   await query(
@@ -117,7 +133,7 @@ async function logAction({
       action,
       tableName,
       recordId != null ? String(recordId) : null,
-      oldValues ? JSON.stringify(oldValues) : null,
+      oldValuesOut ? JSON.stringify(oldValuesOut) : null,
       newValuesOut ? JSON.stringify(newValuesOut) : null,
       ip,
       userAgent,

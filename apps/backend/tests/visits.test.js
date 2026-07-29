@@ -31,6 +31,7 @@ jest.mock('../src/config/database', () => {
               parcel_id: 'parcel-uuid-123',
               lat: '27.502105',
               lng: '33.568656',
+              ref_num: 'F-mock-123',
             }],
           };
         }
@@ -49,7 +50,7 @@ describe('addVisit audit logs integration', () => {
     // Mock the location retrieval query
     db.query.mockImplementation(async (sql, params) => {
       if (sql.includes('SELECT * FROM locations')) {
-        return { rows: [{ id: 'location-uuid-123', site_id: 'site-uuid-123', parcel_id: 'parcel-uuid-123', lat: '27.502105', lng: '33.568656' }] };
+        return { rows: [{ id: 'location-uuid-123', site_id: 'site-uuid-123', parcel_id: 'parcel-uuid-123', lat: '27.502105', lng: '33.568656', ref_num: 'F-mock-123' }] };
       }
       if (sql.includes('SELECT label FROM categories')) {
         return { rows: [{ label: 'Construction Debris' }] };
@@ -114,32 +115,28 @@ describe('addVisit audit logs integration', () => {
     const auditParams = auditInsertCall[1];
     // Parameters mapping in logAction query:
     // [userId, siteId, action, tableName, recordId, oldValues, newValues, ip, userAgent]
-    expect(auditParams[2]).toBe('CREATE');
+    expect(auditParams[2]).toBe('UPDATE');
     expect(auditParams[3]).toBe('visits');
     expect(auditParams[4]).toBe('visit-uuid-123'); // recordId
     
-    // oldValues should contain location info and empty photos
+    // oldValues should contain only the ref_num since unchanged location fields (parcel, lat, lng, photos) are removed
     const oldValuesObj = JSON.parse(auditParams[5]);
     expect(oldValuesObj).toEqual({
-      parcel: 'Parcel 44',
-      lat: 27.502105,
-      lng: 33.568656,
-      photos: [],
+      ref_num: 'F-mock-123',
     });
     
-    // newValues should contain the resolved JSON, coordinates, parcel, and photos
+    // newValues should contain only the changed fields (the new visit fields), metadata, and ref_num
     const newValuesObj = JSON.parse(auditParams[6]);
     expect(newValuesObj).toEqual({
+      changed: true,
+      changedFields: ['category', 'escalation', 'label', 'notes', 'status', 'visit_date'],
       visit_date: '2026-07-07T00:00:00.000Z',
       category: 'Construction Debris',
       escalation: 'Client FM',
       status: '1st Offense',
       label: 'Sample Label',
       notes: 'Sample Notes',
-      parcel: 'Parcel 44',
-      lat: 27.502105,
-      lng: 33.568656,
-      photos: [],
+      ref_num: 'F-mock-123',
     });
   });
 });

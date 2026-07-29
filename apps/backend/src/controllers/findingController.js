@@ -360,6 +360,7 @@ async function addVisit(req, res, next) {
     });
 
     const oldValues = await resolveAuditValues({
+      ref_num: location.ref_num,
       parcel_id: location.parcel_id,
       lat: location.lat ? Number(location.lat) : null,
       lng: location.lng ? Number(location.lng) : null,
@@ -367,6 +368,7 @@ async function addVisit(req, res, next) {
     });
 
     const newValues = await resolveAuditValues({
+      ref_num: location.ref_num,
       visit_date: newVisit.visit_date,
       category_id: newVisit.category_id,
       label: newVisit.label,
@@ -378,7 +380,7 @@ async function addVisit(req, res, next) {
       lng: updatedLoc.lng ? Number(updatedLoc.lng) : null,
       photos: photos.map(p => toStorageKey(p)),
     });
-    await logAction({ req, action: 'CREATE', tableName: 'visits', recordId: newVisit.id, siteId, oldValues, newValues });
+    await logAction({ req, action: 'UPDATE', tableName: 'visits', recordId: newVisit.id, siteId, oldValues, newValues });
     res.status(201).json({ message: 'Visit added', visitId: newVisit.id, visit: {
       id: newVisit.id,
       visitDate: formatDateStr(newVisit.visit_date),
@@ -468,6 +470,7 @@ async function editVisit(req, res, next) {
     // Resolve reference ids (category/status/escalation) to labels so the audit
     // log stores readable values instead of UUIDs.
     const oldValues = before && await resolveAuditValues({
+      ref_num: location.ref_num,
       visit_date: before.visit_date,
       category_id: before.category_id,
       label: before.label,
@@ -480,6 +483,7 @@ async function editVisit(req, res, next) {
       photos: oldPhotos,
     });
     const newValues = await resolveAuditValues({
+      ref_num: location.ref_num,
       visit_date: updated.visit_date,
       category_id: updated.category_id,
       label: updated.label,

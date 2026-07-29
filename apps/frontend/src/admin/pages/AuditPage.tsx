@@ -20,7 +20,7 @@ const ACTION_STYLES: Record<string, string> = {
 
 // Display label only — the action stored in audit_logs is still UPDATE, so
 // existing rows, the API filter and any external reader are unaffected.
-const ACTION_LABELS: Record<string, string> = { UPDATE: 'VIEW' };
+const ACTION_LABELS: Record<string, string> = { UPDATE: 'UPDATE' };
 const actionLabel = (a: string) => ACTION_LABELS[a] ?? a;
 
 export function AuditPage() {
@@ -94,8 +94,7 @@ export function AuditPage() {
           <select className={cn(selectCls, 'flex-1 min-w-[120px] sm:flex-none')} value={action} onChange={(e) => { setAction(e.target.value); ls.setPage(1); }}>
             <option value="">All actions</option>
             <option value="CREATE">CREATE</option>
-            {/* value stays UPDATE — that is what the API filters on */}
-            <option value="UPDATE">VIEW</option>
+            <option value="UPDATE">UPDATE</option>
             <option value="DELETE">DELETE</option>
           </select>
         </div>
