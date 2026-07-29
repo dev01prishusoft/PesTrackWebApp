@@ -432,7 +432,6 @@ function importFindings(input){
     function tryLoad(attempts){
       if(typeof window._importFindingsData === 'function'){
         window._importFindingsData(incoming, czArr);
-        showNotif(`✅ Imported ${incoming.length} finding(s)`);
       } else if(attempts > 0){
         setTimeout(()=>tryLoad(attempts-1), 150);
       } else {
@@ -3015,128 +3014,56 @@ window._importFindingsData = function(arr, czArr){
   }
   
   const token = localStorage.getItem('pt_token');
-  showNotif('⏳ Clearing existing data on server...', false, 0);
+  showNotif(`⏳ Importing ${arr.length} finding(s)...`, false, 0);
   
-  fetch('/api/findings?siteId=' + currentSiteId, {
-    method: 'DELETE',
-    headers: { 'Authorization': 'Bearer ' + token }
+  const payloadFindings = arr.map(loc => {
+    const visits = [...(loc.visits || [])];
+    const parcelId = resolveParcelId(loc.parcel, loc.lat, loc.lng);
+    return {
+      lat: Number(loc.lat),
+      lng: Number(loc.lng),
+      parcel_id: parcelId,
+      ref_num: loc.refNum,
+      visits: visits.map(v => ({
+        visitDate: v.date,
+        categoryId: categoryLabelToId[CATEGORY_MAP[v.cat]] || categoryLabelToId['Other'],
+        label: v.label || '',
+        notes: v.notes || '',
+        escalatedToId: escalationLabelToId[v.escalated] || escalationLabelToId['Not assigned'],
+        statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId['1st Offense'],
+        photos: v.photos || []
+      }))
+    };
+  });
+
+  const payloadZones = (czArr || []).map(cz => ({
+    lat: Number(cz.lat),
+    lng: Number(cz.lng)
+  }));
+
+  const bulkPayload = {
+    siteId: currentSiteId,
+    findings: payloadFindings,
+    zones: payloadZones
+  };
+
+  fetch('/api/findings/import-bulk', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    },
+    body: JSON.stringify(bulkPayload)
   })
   .then(res => {
     if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
-    if (!res.ok) throw new Error('Failed to clear findings');
-    
-    showNotif('⏳ Uploading imported findings to server...', false, 0);
-    
-    const promises = arr.map(loc => {
-      const visits = [...(loc.visits || [])];
-      if (!visits.length) return Promise.resolve();
-      
-      const [first, ...rest] = visits;
-      
-      const uploadPhotosPromise = Promise.all((first.photos || []).map(p => {
-        if (p.startsWith('data:')) {
-          return uploadPhotoToServer(dataURLtoBlob(p)).then(r => {
-            primePhotoCache(r.key, p);
-            return r.key;
-          });
-        }
-        return Promise.resolve(p);
-      }));
-      
-      return uploadPhotosPromise.then(firstPhotos => {
-        const parcelId = resolveParcelId(loc.parcel, loc.lat, loc.lng);
-        
-        const payload = {
-          siteId: currentSiteId,
-          lat: Number(loc.lat),
-          lng: Number(loc.lng),
-          parcel_id: parcelId,
-          ref_num: loc.refNum,
-          visit: {
-            visitDate: first.date,
-            categoryId: categoryLabelToId[CATEGORY_MAP[first.cat]] || categoryLabelToId['Other'],
-            label: first.label || '',
-            notes: first.notes || '',
-            escalatedToId: escalationLabelToId[first.escalated] || escalationLabelToId['Not assigned'],
-            statusId: statusLabelToId[STATUS_MAP[first.status]] || statusLabelToId['1st Offense'],
-            photos: firstPhotos
-          }
-        };
-        
-        return fetch('/api/findings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(createdLoc => {
-          return rest.reduce((chain, v) => {
-            return chain.then(() => {
-              const uploadRestPhotos = Promise.all((v.photos || []).map(p => {
-                if (p.startsWith('data:')) {
-                  return uploadPhotoToServer(dataURLtoBlob(p)).then(r => {
-            primePhotoCache(r.key, p);
-            return r.key;
-          });
-                }
-                return Promise.resolve(p);
-              }));
-              
-              return uploadRestPhotos.then(restPhotos => {
-                const visitPayload = {
-                  siteId: currentSiteId,
-                  visitDate: v.date,
-                  categoryId: categoryLabelToId[CATEGORY_MAP[v.cat]] || categoryLabelToId['Other'],
-                  label: v.label || '',
-                  notes: v.notes || '',
-                  escalatedToId: escalationLabelToId[v.escalated] || escalationLabelToId['Not assigned'],
-                  statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId['1st Offense'],
-                  photos: restPhotos
-                };
-                
-                return fetch('/api/findings/' + encodeURIComponent(createdLoc.id) + '/visits', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                  },
-                  body: JSON.stringify(visitPayload)
-                });
-              });
-            });
-          }, Promise.resolve());
-        });
-      });
-    });
-    
-    return Promise.all(promises);
-  })
-  .then(() => {
-    if (Array.isArray(czArr)) {
-      const czPromises = czArr.map(cz => {
-        return fetch('/api/zones', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({
-            siteId: currentSiteId,
-            lat: Number(cz.lat),
-            lng: Number(cz.lng)
-          })
-        });
-      });
-      return Promise.all(czPromises);
-    }
+    if (!res.ok) throw new Error('Failed to import backup bulk');
+    return res.json();
   })
   .then(() => {
     loadFindings();
     loadConstrZones();
-    showNotif('✅ JSON backup imported successfully');
+    showNotif(`✅ Imported ${arr.length} finding(s)`);
   })
   .catch(err => {
     console.error(err);

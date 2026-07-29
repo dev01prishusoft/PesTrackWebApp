@@ -34,6 +34,8 @@ router.get('/findings/photo', siteAccess, ctrl.getPhoto);
 router.get('/findings', siteAccess, ctrl.listFindings);
 router.get(`/findings/${LOC_ID}`, siteAccess, ctrl.getFinding);
 router.delete('/findings', requireAdmin, siteAccess, ctrl.clearFindings);
+router.post('/findings/import-clear', requireAdmin, siteAccess, ctrl.clearFindings);
+router.post('/findings/import-bulk', requireAdmin, siteAccess, ctrl.importBulk);
 router.post('/findings', canWrite, siteAccess, ctrl.createFinding);
 router.post(`/findings/${LOC_ID}/visits`, canWrite, siteAccess, ctrl.addVisit);
 router.put(`/findings/${LOC_ID}/visits/:visitId`, canWrite, siteAccess, ctrl.editVisit);

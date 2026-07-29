@@ -27,10 +27,16 @@ describe('resolveAuditValues', () => {
       if (sql.includes('parcels')) {
         return { rows: [{ parcel_name: 'Parcel 44' }] };
       }
+      if (sql.includes('users')) {
+        return { rows: [{ full_name: 'John Doe', username: 'johndoe' }] };
+      }
       return { rows: [] };
     });
 
     const input = {
+      id: 'visit-uuid',
+      location_id: 'location-uuid',
+      created_by: 'user-uuid',
       visit_date: '2026-07-07T00:00:00.000Z',
       category_id: 'cat-uuid',
       label: 'Sample Label',
@@ -39,6 +45,7 @@ describe('resolveAuditValues', () => {
       status_id: 'status-uuid',
       siteIds: ['site-1', 'site-2'],
       parcel_id: 'parcel-uuid',
+      engineer_id: 'eng-uuid',
     };
 
     const result = await resolveAuditValues(input);
@@ -52,9 +59,10 @@ describe('resolveAuditValues', () => {
       status: '1st Offense',
       sites: ['Site A', 'Site B'],
       parcel: 'Parcel 44',
+      engineer: 'John Doe',
     });
 
-    expect(db.query).toHaveBeenCalledTimes(5);
+    expect(db.query).toHaveBeenCalledTimes(6);
   });
 
   test('returns input value directly if null or not an object', async () => {

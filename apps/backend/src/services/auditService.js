@@ -43,6 +43,21 @@ async function resolveAuditValues(values) {
     delete out.parcel_id;
   }
 
+  // Resolve engineer_id to engineer name.
+  if (out.engineer_id) {
+    const { rows } = await query('SELECT full_name, username FROM users WHERE id = $1', [out.engineer_id]);
+    out.engineer = rows[0] ? (rows[0].full_name || rows[0].username) : out.engineer_id;
+    delete out.engineer_id;
+  } else if ('engineer_id' in out) {
+    delete out.engineer_id;
+  }
+
+  // Omit internal database UUIDs and bookkeeping fields that don't belong in user audit details
+  const fieldsToDelete = ['id', 'location_id', 'created_by', 'site_id'];
+  for (const f of fieldsToDelete) {
+    delete out[f];
+  }
+
   return out;
 }
 
@@ -92,6 +107,9 @@ async function logAction({
   oldValues = null,
   newValues = null,
 }) {
+  if (req && req.headers && req.headers['x-bulk-import'] === 'true') {
+    return;
+  }
   const userId = req.user ? req.user.id : null;
   const rawIp = req.ip || req.socket?.remoteAddress || (req.headers && req.headers['x-forwarded-for']) || '';
   const ip = rawIp.replace(/^::ffff:/, '') || null;

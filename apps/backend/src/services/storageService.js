@@ -177,8 +177,30 @@ async function getPhotoObject(key) {
   };
 }
 
+/**
+ * Decodes a base64 data URL and uploads it to S3.
+ * @param {string} base64Str
+ * @returns {Promise<{ key: string, url: string }>}
+ */
+async function uploadBase64Photo(base64Str) {
+  const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 string format');
+  }
+  const mimetype = matches[1];
+  const buffer = Buffer.from(matches[2], 'base64');
+  const ext = mimetype.split('/')[1] || 'jpg';
+
+  return uploadPhoto({
+    buffer,
+    mimetype,
+    originalname: `imported_photo.${ext}`,
+  });
+}
+
 module.exports = {
   uploadPhoto,
+  uploadBase64Photo,
   deletePhotos,
   presignGet,
   presignKeys,

@@ -2,6 +2,7 @@ const { query, withTransaction } = require('../config/database');
 const { logAction, resolveAuditValues } = require('../services/auditService');
 const {
   uploadPhoto,
+  uploadBase64Photo,
   deletePhotos,
   presignKeys,
   toStorageKey,
@@ -364,7 +365,6 @@ async function addVisit(req, res, next) {
       parcel_id: location.parcel_id,
       lat: location.lat ? Number(location.lat) : null,
       lng: location.lng ? Number(location.lng) : null,
-      photos: [],
     });
 
     const newValues = await resolveAuditValues({
@@ -519,7 +519,12 @@ async function deleteVisit(req, res, next) {
     if (!rowCount) return res.status(404).json({ error: 'Visit not found' });
     deletePhotos(photoKeys);
 
-    await logAction({ req, action: 'DELETE', tableName: 'visits', recordId: req.params.visitId, siteId, oldValues: rows[0] });
+    const oldValues = await resolveAuditValues({
+      ...rows[0],
+      ref_num: location.ref_num,
+      photos: photoKeys,
+    });
+    await logAction({ req, action: 'DELETE', tableName: 'visits', recordId: req.params.visitId, siteId, oldValues });
     res.json({ message: 'Visit deleted' });
   } catch (err) {
     next(err);
@@ -584,14 +589,49 @@ async function clearFindings(req, res, next) {
       );
     }
     deletePhotos(photoKeys);
-    await logAction({
-      req,
-      action: 'DELETE',
-      tableName: 'locations',
-      recordId: `site:${siteId}`,
-      siteId,
-      newValues: { message: `Cleared ${rowCount} findings` },
-    });
+    const importCount = req.query.importCount;
+    if (importCount) {
+      const findingsSummary = Array.isArray(req.body.findings)
+        ? req.body.findings.map(f => ({
+            refNum: f.refNum,
+            parcel: f.parcel,
+            lat: f.lat,
+            lng: f.lng,
+            visits: Array.isArray(f.visits)
+              ? f.visits.map(v => ({
+                  date: v.date,
+                  cat: v.cat,
+                  status: v.status,
+                  label: v.label,
+                  notes: v.notes,
+                  escalated: v.escalated,
+                  hasPhotos: Array.isArray(v.photos) && v.photos.length > 0
+                }))
+              : []
+          }))
+        : null;
+
+      await logAction({
+        req,
+        action: 'CREATE',
+        tableName: 'locations',
+        recordId: `site:${siteId}`,
+        siteId,
+        newValues: {
+          message: `Imported ${importCount} findings from JSON backup`,
+          importedData: findingsSummary
+        },
+      });
+    } else {
+      await logAction({
+        req,
+        action: 'DELETE',
+        tableName: 'locations',
+        recordId: `site:${siteId}`,
+        siteId,
+        newValues: { message: `Cleared ${rowCount} findings` },
+      });
+    }
     res.json({ message: `Cleared ${rowCount} findings` });
   } catch (err) {
     next(err);
@@ -729,6 +769,233 @@ async function getPhoto(req, res, next) {
   }
 }
 
+async function importBulk(req, res, next) {
+  try {
+    const { siteId, findings = [], zones = [] } = req.body;
+    if (!siteId) {
+      return res.status(400).json({ error: 'siteId is required' });
+    }
+
+    // Step 1: Upload base64 photos to S3 outside the database transaction
+    const uploadedKeysToCleanup = [];
+    try {
+      for (const finding of findings) {
+        if (!finding.visits) continue;
+        for (const visit of finding.visits) {
+          if (!visit.photos) continue;
+          const mappedPhotos = [];
+          for (const photo of visit.photos) {
+            if (typeof photo === 'string' && photo.startsWith('data:')) {
+              const { key } = await uploadBase64Photo(photo);
+              uploadedKeysToCleanup.push(key);
+              mappedPhotos.push(key);
+            } else {
+              mappedPhotos.push(photo);
+            }
+          }
+          visit.photos = mappedPhotos;
+        }
+      }
+    } catch (uploadErr) {
+      if (uploadedKeysToCleanup.length > 0) {
+        await deletePhotos(uploadedKeysToCleanup);
+      }
+      throw uploadErr;
+    }
+
+    // Step 2: Execute clear and insert operations in a transaction
+    const { oldPhotoKeys, oldFindingsSummary } = await withTransaction(async (client) => {
+      // 2a. Fetch existing locations for the site
+      const { rows: locRows } = await client.query(
+        `SELECT id, lat, lng, parcel_id, ref_num FROM locations WHERE site_id = $1`,
+        [siteId]
+      );
+      const locIds = locRows.map((l) => l.id);
+
+      let oldSummary = [];
+      if (locIds.length > 0) {
+        // 2b. Fetch visits and their photo keys/labels
+        const { rows: visitRows } = await client.query(
+          `SELECT v.id, v.location_id, v.visit_date, v.category_id, v.label, v.notes, v.escalated_to_id, v.status_id,
+                  c.label AS category, s.label AS status, e.label AS escalated, p.photo_url,
+                  par.parcel_name
+             FROM visits v
+             JOIN categories c ON c.id = v.category_id
+             JOIN statuses s ON s.id = v.status_id
+        LEFT JOIN escalation_options e ON e.id = v.escalated_to_id
+        LEFT JOIN photos p ON p.visit_id = v.id
+        LEFT JOIN locations loc ON loc.id = v.location_id
+        LEFT JOIN parcels par ON par.id = loc.parcel_id
+            WHERE v.location_id = ANY($1::uuid[])`,
+          [locIds]
+        );
+
+        const visitsByLoc = new Map();
+        for (const r of visitRows) {
+          if (!visitsByLoc.has(r.location_id)) {
+            visitsByLoc.set(r.location_id, []);
+          }
+          const list = visitsByLoc.get(r.location_id);
+          let visit = list.find((v) => v.id === r.id);
+          if (!visit) {
+            visit = {
+              id: r.id,
+              date: formatDateStr(r.visit_date),
+              category: r.category,
+              status: r.status,
+              label: r.label || '',
+              notes: r.notes || '',
+              escalated: r.escalated || 'Not assigned',
+              parcel_name: r.parcel_name,
+              photos: [],
+            };
+            list.push(visit);
+          }
+          if (r.photo_url) {
+            visit.photos.push(r.photo_url);
+          }
+        }
+
+        oldSummary = locRows.map((l) => {
+          const locVisits = visitsByLoc.get(l.id) || [];
+          const firstVisit = locVisits[0];
+          const parcelName = firstVisit ? firstVisit.parcel_name : null;
+          return {
+            refNum: l.ref_num,
+            parcel: parcelName || 'Not assigned',
+            lat: Number(l.lat),
+            lng: Number(l.lng),
+            visits: locVisits.map((v) => ({
+              date: v.date,
+              category: v.category,
+              status: v.status,
+              label: v.label,
+              notes: v.notes,
+              escalated: v.escalated,
+              photos: v.photos,
+            })),
+          };
+        });
+      }
+
+      const { rows: keys } = await client.query(
+        `SELECT photo_url FROM photos p
+           JOIN visits v ON v.id = p.visit_id
+           JOIN locations l ON l.id = v.location_id
+          WHERE l.site_id = $1`,
+        [siteId]
+      );
+      const oldKeys = keys.map((r) => r.photo_url);
+
+      await client.query('DELETE FROM locations WHERE site_id = $1', [siteId]);
+      await client.query('DELETE FROM construction_zones WHERE site_id = $1', [siteId]);
+
+      for (const f of findings) {
+        const { rows: locResult } = await client.query(
+          `INSERT INTO locations (site_id, lat, lng, parcel_id, ref_num, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+          [siteId, f.lat, f.lng, f.parcel_id || null, f.ref_num || null, req.user.id]
+        );
+        const locationId = locResult[0].id;
+
+        if (Array.isArray(f.visits)) {
+          for (const v of f.visits) {
+            const { rows: visitResult } = await client.query(
+              `INSERT INTO visits (location_id, visit_date, category_id, label, notes, escalated_to_id, status_id, created_by, engineer_id)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+              [
+                locationId,
+                v.visitDate,
+                v.categoryId,
+                v.label || null,
+                v.notes || null,
+                v.escalatedToId || null,
+                v.statusId,
+                req.user.id,
+                req.body.engineerId || req.user.id,
+              ]
+            );
+            const visitId = visitResult[0].id;
+
+            if (Array.isArray(v.photos)) {
+              for (const photoKey of v.photos) {
+                await client.query(
+                  `INSERT INTO photos (visit_id, photo_url, uploaded_by)
+                   VALUES ($1,$2,$3)`,
+                  [visitId, photoKey, req.user.id]
+                );
+              }
+            }
+          }
+        }
+      }
+
+      for (const cz of zones) {
+        await client.query(
+          `INSERT INTO construction_zones (site_id, lat, lng, created_by)
+           VALUES ($1,$2,$3,$4)`,
+          [siteId, cz.lat, cz.lng, req.user.id]
+        );
+      }
+
+      return { oldPhotoKeys: oldKeys, oldFindingsSummary: oldSummary };
+    });
+
+    if (oldPhotoKeys && oldPhotoKeys.length > 0) {
+      deletePhotos(oldPhotoKeys);
+    }
+
+    // Fetch lookup maps to resolve UUIDs to human-readable labels
+    const { rows: dbParcels } = await query('SELECT id, parcel_name FROM parcels WHERE site_id = $1', [siteId]);
+    const { rows: dbCategories } = await query('SELECT id, label FROM categories');
+    const { rows: dbStatuses } = await query('SELECT id, label FROM statuses');
+    const { rows: dbEscalations } = await query('SELECT id, label FROM escalation_options');
+
+    const parcelMap = new Map(dbParcels.map(p => [p.id, p.parcel_name]));
+    const categoryMap = new Map(dbCategories.map(c => [c.id, c.label]));
+    const statusMap = new Map(dbStatuses.map(s => [s.id, s.label]));
+    const escalationMap = new Map(dbEscalations.map(e => [e.id, e.label]));
+
+    const findingsSummary = findings.map(f => ({
+      refNum: f.ref_num,
+      parcel: parcelMap.get(f.parcel_id) || f.parcel_id || 'Not assigned',
+      lat: f.lat,
+      lng: f.lng,
+      visits: Array.isArray(f.visits)
+        ? f.visits.map(v => ({
+            date: v.visitDate,
+            category: categoryMap.get(v.categoryId) || v.categoryId,
+            status: statusMap.get(v.statusId) || v.statusId,
+            label: v.label || '',
+            notes: v.notes || '',
+            escalated: v.escalatedToId ? (escalationMap.get(v.escalatedToId) || v.escalatedToId) : 'Not assigned',
+            photos: v.photos || []
+          }))
+        : []
+    }));
+
+    await logAction({
+      req,
+      action: 'CREATE',
+      tableName: 'locations',
+      recordId: `site:${siteId}`,
+      siteId,
+      oldValues: {
+        message: `Existing findings on site before import`,
+        importedData: oldFindingsSummary
+      },
+      newValues: {
+        message: `Imported ${findings.length} findings from JSON backup`,
+        importedData: findingsSummary
+      },
+    });
+
+    res.json({ message: `Successfully imported ${findings.length} findings` });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listFindings,
   getFinding,
@@ -743,4 +1010,5 @@ module.exports = {
   deleteZone,
   uploadPhotos,
   getPhoto,
+  importBulk,
 };

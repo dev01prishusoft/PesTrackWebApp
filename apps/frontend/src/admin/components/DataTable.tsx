@@ -51,7 +51,7 @@ export function DataTable<T>({
 
   return (
     <div className="w-full max-w-full bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
-      <div className="w-full overflow-auto flex-1 min-h-0 relative">
+      <div className="relative flex-1 min-h-0 flex flex-col w-full">
         {isLoading && (
           <div className="absolute inset-0 z-10 flex flex-col justify-center items-center gap-4 bg-white/50 backdrop-blur-[1px] text-slate-800" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
             <div style={{
@@ -65,67 +65,69 @@ export function DataTable<T>({
             <span style={{ fontWeight: 600, letterSpacing: '0.05em', fontSize: '13px', textTransform: 'uppercase', color: '#475569' }}>Loading...</span>
           </div>
         )}
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="hover:bg-transparent">
-                {hg.headers.map((h) => {
-                  const sortable = !!h.column.id && h.column.id !== 'actions';
-                  const active = sortState.sort === h.column.id;
-                  const isActionsCol = h.column.id === 'actions';
-                  return (
-                    <TableHead
-                      key={h.id}
-                      onClick={sortable ? () => toggleSort(h.column.id) : undefined}
-                      className={cn(
-                        isActionsCol && 'text-right w-px whitespace-nowrap',
-                        sortable && 'cursor-pointer select-none hover:text-foreground'
-                      )}
-                    >
-                      <span className={cn('inline-flex items-center gap-1', isActionsCol && 'justify-end')}>
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                        {active &&
-                          (sortState.order === 'asc' ? (
-                            <ChevronUp size={13} />
-                          ) : (
-                            <ChevronDown size={13} />
-                          ))}
-                      </span>
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center text-muted-foreground">
-                    <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center mb-3">
-                      <Database size={22} className="text-primary" />
-                    </div>
-                    <p className="font-medium text-foreground">No {emptyLabel} found</p>
-                    <p className="text-xs mt-1">Try adjusting your search or filters.</p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={cn(cell.column.id === 'actions' && 'text-right w-px whitespace-nowrap')}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+        <div className="w-full overflow-auto flex-1 min-h-0">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id} className="hover:bg-transparent">
+                  {hg.headers.map((h) => {
+                    const sortable = !!h.column.id && h.column.id !== 'actions';
+                    const active = sortState.sort === h.column.id;
+                    const isActionsCol = h.column.id === 'actions';
+                    return (
+                      <TableHead
+                        key={h.id}
+                        onClick={sortable ? () => toggleSort(h.column.id) : undefined}
+                        className={cn(
+                          isActionsCol && 'text-right w-px whitespace-nowrap',
+                          sortable && 'cursor-pointer select-none hover:text-foreground'
+                        )}
+                      >
+                        <span className={cn('inline-flex items-center gap-1', isActionsCol && 'justify-end')}>
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          {active &&
+                            (sortState.order === 'asc' ? (
+                              <ChevronUp size={13} />
+                            ) : (
+                              <ChevronDown size={13} />
+                            ))}
+                        </span>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {data.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center text-muted-foreground">
+                      <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center mb-3">
+                        <Database size={22} className="text-primary" />
+                      </div>
+                      <p className="font-medium text-foreground">No {emptyLabel} found</p>
+                      <p className="text-xs mt-1">Try adjusting your search or filters.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(cell.column.id === 'actions' && 'text-right w-px whitespace-nowrap')}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {pagination && (
