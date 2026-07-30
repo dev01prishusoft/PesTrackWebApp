@@ -14,12 +14,9 @@ import {
   useUpdateSite,
   useInfiniteUsers,
   useSite,
-  useAssignUserToSite,
-  useRemoveUserFromSite,
   useDeleteSite,
 } from '../api/queries';
 import type { Site } from '../lib/types';
-import { getToken } from '../../lib/api';
 import { MultiSelect } from '../components/ui/MultiSelect';
 
 const inputCls =
@@ -95,8 +92,6 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
   const { data: siteDetails, isLoading: isLoadingSite } = useSite(site?.id);
   const [userSearch, setUserSearch] = useState('');
   const { data: infiniteUsersData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteUsers(50, userSearch);
-  const assignUser = useAssignUserToSite();
-  const removeUser = useRemoveUserFromSite();
 
   const [name, setName] = useState(site?.name ?? '');
   const [lat, setLat] = useState(site?.map_center_lat?.toString() ?? '');
@@ -188,60 +183,32 @@ function SiteModal({ site, onClose }: { site: Site | null; onClose: () => void }
 
     setIsSaving(true);
     try {
-      let savedSiteId = site?.id;
-      if (editing) {
-        await update.mutateAsync({ id: site!.id, body });
-      } else {
-        const res = await create.mutateAsync(body) as { site: Site };
-        savedSiteId = res.site.id;
-      }
+      // The site's fields, its assigned users and its parcel sheet all go in one
+      // request, so the save is one action — and one audit entry — rather than a
+      // site row, a parcel row and one row per user assignment.
+      const payload = { ...body, userIds, file };
+      const saved = await (editing
+        ? update.mutateAsync({ id: site!.id, body: payload })
+        : create.mutateAsync(payload)) as {
+          site: Site;
+          parcels?: { quadChanges?: string[]; coordChanges?: string[] };
+          parcelError?: string;
+        };
 
-      if (!savedSiteId) throw new Error('Site ID could not be determined');
+      if (!saved.site?.id) throw new Error('Site ID could not be determined');
+      // The site itself saved either way; only the sheet was rejected.
+      if (saved.parcelError) throw new Error(saved.parcelError);
 
       let pendingWarn: { quadChanges: string[]; coordChanges: string[]; fileName: string } | null = null;
-
-      if (file) {
-        const token = getToken();
-        const formData = new FormData();
-        formData.append('siteId', savedSiteId.toString());
-        formData.append('file', file);
-        const uploadRes = await fetch('/api/parcels/upload', {
-          method: 'POST',
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: formData,
-        });
-        const uploadData = await uploadRes.json().catch(() => ({}));
-        if (!uploadRes.ok) {
-          throw new Error(uploadData.error || 'Failed to upload parcel list');
-        }
-        if (uploadData.quadChanges?.length || uploadData.coordChanges?.length) {
-          pendingWarn = {
-            quadChanges: uploadData.quadChanges || [],
-            coordChanges: uploadData.coordChanges || [],
-            fileName: file.name,
-          };
-        }
+      if (file && (saved.parcels?.quadChanges?.length || saved.parcels?.coordChanges?.length)) {
+        pendingWarn = {
+          quadChanges: saved.parcels.quadChanges || [],
+          coordChanges: saved.parcels.coordChanges || [],
+          fileName: file.name,
+        };
       }
 
-      const toAssign = userIds.filter((id) => !initialUserIds.includes(id));
-      const toRemove = initialUserIds.filter((id) => !userIds.includes(id));
-      // The site itself is already saved; a hiccup on an individual user
-      // assignment shouldn't keep the dialog open. Run them, collect failures.
-      const assignErrors: string[] = [];
-      for (const uId of toAssign) {
-        try { await assignUser.mutateAsync({ siteId: savedSiteId, userId: uId }); }
-        catch (e) { assignErrors.push((e as Error).message); }
-      }
-      for (const uId of toRemove) {
-        try { await removeUser.mutateAsync({ siteId: savedSiteId, userId: uId }); }
-        catch (e) { assignErrors.push((e as Error).message); }
-      }
       toast.success(editing ? 'Updated successfully.' : 'Saved successfully.');
-      if (assignErrors.length) {
-        // Surface but don't block — the site saved successfully.
-        console.warn('Some user assignments failed:', assignErrors);
-        toast.warning('Site saved, but some user assignments could not be applied.');
-      }
 
       if (pendingWarn) {
         setWarnData(pendingWarn);

@@ -293,6 +293,7 @@ async function createFinding(req, res, next) {
         notes: newV.notes,
         escalatedToId: newV.escalated_to_id,
         statusId: newV.status_id,
+        engineerId: newV.engineer_id,
         photos: photos,
       }];
       
@@ -311,6 +312,7 @@ async function createFinding(req, res, next) {
       notes: firstVisit.notes,
       escalated_to_id: firstVisit.escalatedToId,
       status_id: firstVisit.statusId,
+      engineer_id: firstVisit.engineerId,
       photos: photos.map(p => toStorageKey(p)),
     });
     await logAction({ req, action: 'CREATE', tableName: 'locations', recordId: created.id, siteId, newValues });
@@ -360,27 +362,43 @@ async function addVisit(req, res, next) {
       return rows[0];
     });
 
-    const oldValues = await resolveAuditValues({
-      ref_num: location.ref_num,
-      parcel_id: location.parcel_id,
-      lat: location.lat ? Number(location.lat) : null,
-      lng: location.lng ? Number(location.lng) : null,
-    });
+    // A create has no prior state of its own, so the old side carries only the
+    // ref_num that identifies the finding — plus the parcel / GPS the dialog
+    // overwrote, when it moved them, since those values would otherwise be lost
+    // from the record. Location fields that didn't move are left off rather than
+    // echoed back under an "old value" heading that implies they changed.
+    const locFieldsMoved =
+      location.parcel_id !== updatedLoc.parcel_id ||
+      String(location.lat) !== String(updatedLoc.lat) ||
+      String(location.lng) !== String(updatedLoc.lng);
+
+    const oldValues = await resolveAuditValues(
+      locFieldsMoved
+        ? {
+            ref_num: location.ref_num,
+            parcel_id: location.parcel_id,
+            lat: location.lat ? Number(location.lat) : null,
+            lng: location.lng ? Number(location.lng) : null,
+          }
+        : { ref_num: location.ref_num }
+    );
 
     const newValues = await resolveAuditValues({
       ref_num: location.ref_num,
-      visit_date: newVisit.visit_date,
+      visit_date: formatDateStr(newVisit.visit_date),
       category_id: newVisit.category_id,
       label: newVisit.label,
       notes: newVisit.notes,
       escalated_to_id: newVisit.escalated_to_id,
       status_id: newVisit.status_id,
+      engineer_id: newVisit.engineer_id,
       parcel_id: updatedLoc.parcel_id,
       lat: updatedLoc.lat ? Number(updatedLoc.lat) : null,
       lng: updatedLoc.lng ? Number(updatedLoc.lng) : null,
       photos: photos.map(p => toStorageKey(p)),
     });
-    await logAction({ req, action: 'UPDATE', tableName: 'visits', recordId: newVisit.id, siteId, oldValues, newValues });
+    // A new visit on an existing finding is a CREATE — the row didn't exist before.
+    await logAction({ req, action: 'CREATE', tableName: 'visits', recordId: newVisit.id, siteId, oldValues, newValues });
     res.status(201).json({ message: 'Visit added', visitId: newVisit.id, visit: {
       id: newVisit.id,
       visitDate: formatDateStr(newVisit.visit_date),
@@ -471,12 +489,13 @@ async function editVisit(req, res, next) {
     // log stores readable values instead of UUIDs.
     const oldValues = before && await resolveAuditValues({
       ref_num: location.ref_num,
-      visit_date: before.visit_date,
+      visit_date: formatDateStr(before.visit_date),
       category_id: before.category_id,
       label: before.label,
       notes: before.notes,
       escalated_to_id: before.escalated_to_id,
       status_id: before.status_id,
+      engineer_id: before.engineer_id,
       parcel_id: location.parcel_id,
       lat: location.lat ? Number(location.lat) : null,
       lng: location.lng ? Number(location.lng) : null,
@@ -484,12 +503,13 @@ async function editVisit(req, res, next) {
     });
     const newValues = await resolveAuditValues({
       ref_num: location.ref_num,
-      visit_date: updated.visit_date,
+      visit_date: formatDateStr(updated.visit_date),
       category_id: updated.category_id,
       label: updated.label,
       notes: updated.notes,
       escalated_to_id: updated.escalated_to_id,
       status_id: updated.status_id,
+      engineer_id: updated.engineer_id,
       parcel_id: updatedLoc.parcel_id,
       lat: updatedLoc.lat ? Number(updatedLoc.lat) : null,
       lng: updatedLoc.lng ? Number(updatedLoc.lng) : null,
@@ -521,6 +541,7 @@ async function deleteVisit(req, res, next) {
 
     const oldValues = await resolveAuditValues({
       ...rows[0],
+      visit_date: formatDateStr(rows[0].visit_date),
       ref_num: location.ref_num,
       photos: photoKeys,
     });

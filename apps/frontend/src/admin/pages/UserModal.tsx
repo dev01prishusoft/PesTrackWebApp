@@ -374,6 +374,9 @@ export function UserModal({ user, onClose }: { user: User | null; onClose: () =>
               <MultiSelect
                 options={siteOptions}
                 selectedIds={siteIds}
+                // The sites already on the user, so their chips render even
+                // before/without the page of options that contains them.
+                selectedOptions={userDetails?.sites ?? user?.sites ?? []}
                 onChange={(ids) => { setSiteIds(ids); setFieldErrors(prev => ({ ...prev, siteIds: '' })); }}
                 placeholder="Assign sites to user..."
                 openDirection="up"

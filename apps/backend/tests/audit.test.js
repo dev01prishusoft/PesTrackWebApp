@@ -1,4 +1,4 @@
-const { resolveAuditValues } = require('../src/services/auditService');
+const { resolveAuditValues, logAction } = require('../src/services/auditService');
 const db = require('../src/config/database');
 
 jest.mock('../src/config/database', () => ({
@@ -85,5 +85,56 @@ describe('resolveAuditValues', () => {
       visit_date: '2026-07-07T00:00:00.000Z',
       sites: [],
     });
+  });
+});
+
+describe('logAction change detection', () => {
+  const req = { user: { id: 'user-uuid' }, ip: '127.0.0.1', headers: { 'user-agent': 'Jest' } };
+
+  beforeEach(() => {
+    db.query.mockReset();
+    db.query.mockResolvedValue({ rowCount: 1 });
+  });
+
+  // Reads the new_values payload written by the last logAction call.
+  const loggedNewValues = () => JSON.parse(db.query.mock.calls[0][1][6]);
+
+  test('detects a changed date when the values are Date objects', async () => {
+    await logAction({
+      req,
+      action: 'UPDATE',
+      tableName: 'visits',
+      recordId: 'visit-uuid',
+      oldValues: { label: 'A', visit_date: new Date('2026-07-20') },
+      newValues: { label: 'A', visit_date: new Date('2026-07-29') },
+    });
+
+    expect(loggedNewValues().changedFields).toEqual(['visit_date']);
+  });
+
+  test('treats an unchanged Date as unchanged', async () => {
+    await logAction({
+      req,
+      action: 'UPDATE',
+      tableName: 'visits',
+      recordId: 'visit-uuid',
+      oldValues: { label: 'A', visit_date: new Date('2026-07-20') },
+      newValues: { label: 'B', visit_date: new Date('2026-07-20') },
+    });
+
+    expect(loggedNewValues().changedFields).toEqual(['label']);
+  });
+
+  test('detects a changed date when the values are plain strings', async () => {
+    await logAction({
+      req,
+      action: 'UPDATE',
+      tableName: 'visits',
+      recordId: 'visit-uuid',
+      oldValues: { visit_date: '2026-07-20', notes: 'n' },
+      newValues: { visit_date: '2026-07-29', notes: 'n2' },
+    });
+
+    expect(loggedNewValues().changedFields).toEqual(['notes', 'visit_date']);
   });
 });

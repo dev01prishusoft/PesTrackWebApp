@@ -32,10 +32,13 @@ export async function api<T = unknown>(
   opts: RequestInit = {}
 ): Promise<T> {
   const token = getToken();
+  // A FormData body must set its own Content-Type — the browser appends the
+  // multipart boundary, and forcing application/json would make it unparseable.
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   const res = await fetch(path, {
     ...opts,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(opts.headers || {}),
     },

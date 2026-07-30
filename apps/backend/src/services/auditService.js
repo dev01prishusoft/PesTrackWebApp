@@ -23,6 +23,20 @@ async function resolveAuditValues(values) {
     }
   }
 
+  // User id arrays → user names, so an assignment list reads as people.
+  if (Array.isArray(out.userIds)) {
+    if (out.userIds.length) {
+      const { rows } = await query(
+        'SELECT full_name, username FROM users WHERE id = ANY($1::uuid[])',
+        [out.userIds]
+      );
+      out.users = rows.map((r) => r.full_name || r.username);
+    } else {
+      out.users = [];
+    }
+    delete out.userIds;
+  }
+
   // Site id arrays → site names.
   if (Array.isArray(out.siteIds)) {
     if (out.siteIds.length) {
@@ -72,6 +86,10 @@ const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArr
 // list the order is part of the value.
 function stableStringify(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  // Dates (and anything else with a toJSON) carry their value in the serialized
+  // form, not in own enumerable keys — recursing into keys would render every
+  // Date as `{}` and make two different dates compare equal.
+  if (typeof value.toJSON === 'function') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   return `{${Object.keys(value)
     .sort()

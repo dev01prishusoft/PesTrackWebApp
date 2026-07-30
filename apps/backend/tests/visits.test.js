@@ -31,6 +31,7 @@ jest.mock('../src/config/database', () => {
               escalated_to_id: 'esc-uuid-123',
               status_id: 'status-uuid-123',
               created_by: 'user-uuid-123',
+              engineer_id: 'eng-uuid-123',
             }],
           };
         }
@@ -76,6 +77,9 @@ describe('addVisit audit logs integration', () => {
       }
       if (sql.includes('SELECT parcel_name FROM parcels')) {
         return { rows: [{ parcel_name: 'Parcel 44' }] };
+      }
+      if (sql.includes('FROM users')) {
+        return { rows: [{ full_name: 'Jane Engineer', username: 'jane' }] };
       }
       if (sql.includes('INSERT INTO audit_logs')) {
         return { rowCount: 1 };
@@ -128,30 +132,94 @@ describe('addVisit audit logs integration', () => {
     const auditParams = auditInsertCall[1];
     // Parameters mapping in logAction query:
     // [userId, siteId, action, tableName, recordId, oldValues, newValues, ip, userAgent]
-    expect(auditParams[2]).toBe('UPDATE');
+    // Adding a visit creates a row that didn't exist before, so it is a CREATE
+    expect(auditParams[2]).toBe('CREATE');
     expect(auditParams[3]).toBe('visits');
     expect(auditParams[4]).toBe('visit-uuid-123'); // recordId
-    
-    // oldValues should contain only the ref_num since unchanged location fields (parcel, lat, lng, photos) are removed
-    const oldValuesObj = JSON.parse(auditParams[5]);
-    expect(oldValuesObj).toEqual({
-      ref_num: 'F-mock-123',
-    });
-    
-    // newValues should contain only the changed fields (the new visit fields), metadata, and ref_num
+
+    // Nothing on the parent location moved, so the old side carries only the
+    // ref_num that identifies the finding
+    expect(JSON.parse(auditParams[5])).toEqual({ ref_num: 'F-mock-123' });
+
+    // newValues carries the full created visit — a CREATE has no diff metadata
     const newValuesObj = JSON.parse(auditParams[6]);
     expect(newValuesObj).toEqual({
-      changed: true,
-      changedFields: ['category', 'escalation', 'label', 'notes', 'photos', 'status', 'visit_date'],
       visit_date: '2026-07-07T00:00:00.000Z',
       category: 'Construction Debris',
       escalation: 'Client FM',
       status: '1st Offense',
       label: 'Sample Label',
       notes: 'Sample Notes',
+      engineer: 'Jane Engineer',
       photos: [],
       ref_num: 'F-mock-123',
+      parcel: 'Parcel 44',
+      lat: 27.502105,
+      lng: 33.568656,
     });
+    expect(newValuesObj.changed).toBeUndefined();
+    expect(newValuesObj.changedFields).toBeUndefined();
+  });
+
+  test('addVisit records the old parcel when the add also moves the finding', async () => {
+    // In-transaction reads see the location after updateLocationFields ran, so
+    // the parcel differs from the row findLocation fetched beforehand.
+    db.withTransaction.mockImplementationOnce(async (fn) => fn({
+      query: jest.fn(async (sql) => {
+        if (sql.includes('INSERT INTO visits')) {
+          return { rows: [{ id: 'visit-uuid-123', visit_date: '2026-07-07T00:00:00.000Z', category_id: 'cat-uuid-123', label: 'Sample Label', notes: 'Sample Notes', escalated_to_id: 'esc-uuid-123', status_id: 'status-uuid-123' }] };
+        }
+        if (sql.includes('SELECT * FROM locations')) {
+          return { rows: [{ id: 'location-uuid-123', parcel_id: 'parcel-uuid-999', lat: '27.502105', lng: '33.568656', ref_num: 'F-mock-123' }] };
+        }
+        return { rows: [] };
+      }),
+    }));
+
+    db.query.mockImplementation(async (sql, params) => {
+      if (sql.includes('SELECT * FROM locations')) {
+        return { rows: [{ id: 'location-uuid-123', site_id: 'site-uuid-123', parcel_id: 'parcel-uuid-123', lat: '27.502105', lng: '33.568656', ref_num: 'F-mock-123' }] };
+      }
+      if (sql.includes('SELECT label FROM categories')) return { rows: [{ label: 'Construction Debris' }] };
+      if (sql.includes('SELECT label FROM statuses')) return { rows: [{ label: '1st Offense' }] };
+      if (sql.includes('SELECT label FROM escalation_options')) return { rows: [{ label: 'Client FM' }] };
+      if (sql.includes('SELECT parcel_name FROM parcels')) {
+        return { rows: [{ parcel_name: params[0] === 'parcel-uuid-999' ? 'Parcel 99' : 'Parcel 44' }] };
+      }
+      if (sql.includes('INSERT INTO audit_logs')) return { rowCount: 1 };
+      return { rows: [] };
+    });
+
+    const res = { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
+    const next = jest.fn();
+
+    await addVisit({
+      body: {
+        siteId: 'site-uuid-123',
+        visitDate: '2026-07-07',
+        categoryId: 'cat-uuid-123',
+        label: 'Sample Label',
+        notes: 'Sample Notes',
+        escalatedToId: 'esc-uuid-123',
+        statusId: 'status-uuid-123',
+        parcel_id: 'parcel-uuid-999',
+        photos: [],
+      },
+      params: { locationId: 'location-uuid-123' },
+      user: { id: 'user-uuid-123' },
+      ip: '127.0.0.1',
+      headers: { 'user-agent': 'Jest Test' },
+    }, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    const auditParams = db.query.mock.calls.find(call => call[0].includes('INSERT INTO audit_logs'))[1];
+    expect(JSON.parse(auditParams[5])).toEqual({
+      ref_num: 'F-mock-123',
+      parcel: 'Parcel 44',
+      lat: 27.502105,
+      lng: 33.568656,
+    });
+    expect(JSON.parse(auditParams[6]).parcel).toBe('Parcel 99');
   });
 
   test('addVisit skips audit log when X-Bulk-Import header is set to true', async () => {

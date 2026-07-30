@@ -1,8 +1,35 @@
-const { query } = require('../config/database');
-const { logAction } = require('../services/auditService');
+const { query, withTransaction } = require('../config/database');
+const { logAction, resolveAuditValues } = require('../services/auditService');
+const { importParcels, PARCEL_PARSE_ERROR } = require('../services/parcelImportService');
 const { parsePagination, parseSort, buildResponse } = require('../utils/listQuery');
 
 const SITE_SORT_COLS = ['name', 'slug', 'status', 'default_zoom', 'created_at'];
+
+// Marker for a userIds value that isn't a list, so a bad type is rejected rather
+// than silently treated as "no users".
+const INVALID = Symbol('invalid');
+
+// Multipart form fields are always strings; JSON bodies already hold numbers.
+function toNumberOrNull(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Accepts a real array (JSON body) or a JSON-encoded array (multipart field).
+function parseIdList(value) {
+  if (value == null || value === '') return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : INVALID;
+    } catch {
+      return INVALID;
+    }
+  }
+  return INVALID;
+}
 
 function slugify(name) {
   return String(name)
@@ -87,23 +114,80 @@ async function siteNameTaken(name, excludeId = null) {
 
 async function createSite(req, res, next) {
   try {
-    const { name, mapCenterLat, mapCenterLng, defaultZoom } = req.body || {};
+    // The dialog posts as multipart when it carries a parcel sheet, so numbers
+    // and the id array arrive as strings; plain JSON requests are unaffected.
+    const { name } = req.body || {};
+    const mapCenterLat = toNumberOrNull(req.body?.mapCenterLat);
+    const mapCenterLng = toNumberOrNull(req.body?.mapCenterLng);
+    const defaultZoom = toNumberOrNull(req.body?.defaultZoom);
+    const userIds = parseIdList(req.body?.userIds);
+
     if (!name) return res.status(400).json({ error: 'Site name is required' });
     if (String(name).length > 255) {
       return res.status(400).json({ error: 'Site name is too long', fields: { name: 'Must be at most 255 characters' } });
+    }
+    if (userIds === INVALID) {
+      return res.status(400).json({ error: 'userIds must be an array', fields: { userIds: 'Must be an array' } });
     }
     if (await siteNameTaken(name)) {
       return res.status(400).json({ error: 'This site name is already in use.' });
     }
     const slug = slugify(name);
-    const { rows } = await query(
-      `INSERT INTO sites (name, slug, map_center_lat, map_center_lng, default_zoom)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name, slug, mapCenterLat || null, mapCenterLng || null, defaultZoom || 15]
-    );
-    await logAction({ req, action: 'CREATE', tableName: 'sites', recordId: rows[0].id,
-      siteId: rows[0].id, newValues: rows[0] });
-    res.status(201).json({ site: rows[0] });
+    // The initial user assignments belong to the same act of creating the site,
+    // so they are written in one transaction and reported in one audit row —
+    // rather than the site plus one row per user, none of which named either.
+    const assignedIds = userIds || [];
+    const site = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `INSERT INTO sites (name, slug, map_center_lat, map_center_lng, default_zoom)
+         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [name, slug, mapCenterLat || null, mapCenterLng || null, defaultZoom || 15]
+      );
+      for (const userId of assignedIds) {
+        await client.query(
+          `INSERT INTO user_sites (user_id, site_id) VALUES ($1,$2)
+           ON CONFLICT (user_id, site_id) DO NOTHING`,
+          [userId, rows[0].id]
+        );
+      }
+      return rows[0];
+    });
+
+    // A parcel sheet sent with the dialog is applied here rather than through a
+    // second request, so the site, its users and its starting parcel list are one
+    // audit entry. The site is already committed at this point: a sheet that
+    // cannot be read is reported back without discarding the site, matching what
+    // the separate upload used to leave behind.
+    let parcelResult = null;
+    let parcelError = null;
+    if (req.file) {
+      try {
+        const imported = await importParcels({ siteId: site.id, buffer: req.file.buffer });
+        if (imported.ok) parcelResult = imported;
+        else parcelError = imported.body.error;
+      } catch (err) {
+        console.error('Error importing parcel XLSX during site creation:', err);
+        parcelError = PARCEL_PARSE_ERROR;
+      }
+    }
+
+    // Postgres returns DECIMAL as a string; coerce the coordinates so the log
+    // reads 27.4 rather than "27.400000".
+    const newValues = await resolveAuditValues({
+      ...site,
+      map_center_lat: site.map_center_lat != null ? Number(site.map_center_lat) : null,
+      map_center_lng: site.map_center_lng != null ? Number(site.map_center_lng) : null,
+      userIds: assignedIds,
+      ...(parcelResult ? { parcels: parcelResult.newParcels } : {}),
+      ...(parcelError ? { parcelError } : {}),
+    });
+    await logAction({ req, action: 'CREATE', tableName: 'sites', recordId: site.id,
+      siteId: site.id, newValues });
+    res.status(201).json({
+      site,
+      ...(parcelResult ? { parcels: parcelResult.response } : {}),
+      ...(parcelError ? { parcelError } : {}),
+    });
   } catch (err) {
     next(err);
   }
@@ -111,12 +195,24 @@ async function createSite(req, res, next) {
 
 async function updateSite(req, res, next) {
   try {
-    const { name, mapCenterLat, mapCenterLng, defaultZoom, status } = req.body || {};
+    const { name, status } = req.body || {};
+    // As in createSite: a multipart save (one carrying a parcel sheet) delivers
+    // every field as a string. `undefined` means "not sent", which the COALESCE
+    // below leaves untouched — so a save that only replaces the sheet must not
+    // turn missing coordinates into nulls.
+    const mapCenterLat = req.body?.mapCenterLat != null ? toNumberOrNull(req.body.mapCenterLat) : undefined;
+    const mapCenterLng = req.body?.mapCenterLng != null ? toNumberOrNull(req.body.mapCenterLng) : undefined;
+    const defaultZoom = req.body?.defaultZoom != null ? toNumberOrNull(req.body.defaultZoom) : undefined;
+    const userIds = req.body?.userIds != null ? parseIdList(req.body.userIds) : null;
+
     if (name != null && String(name).length > 255) {
       return res.status(400).json({ error: 'Site name is too long', fields: { name: 'Must be at most 255 characters' } });
     }
     if (status != null && String(status).length > 50) {
       return res.status(400).json({ error: 'Invalid status', fields: { status: 'Must be at most 50 characters' } });
+    }
+    if (userIds === INVALID) {
+      return res.status(400).json({ error: 'userIds must be an array', fields: { userIds: 'Must be an array' } });
     }
     if (name && await siteNameTaken(name, req.params.id)) {
       return res.status(400).json({ error: 'This site name is already in use.' });
@@ -124,21 +220,73 @@ async function updateSite(req, res, next) {
     // Snapshot the row before updating so the audit log can record old values.
     const before = await query('SELECT * FROM sites WHERE id = $1', [req.params.id]);
     if (!before.rows[0]) return res.status(404).json({ error: 'Site not found' });
-    const { rows } = await query(
-      `UPDATE sites SET
-         name = COALESCE($2, name),
-         map_center_lat = COALESCE($3, map_center_lat),
-         map_center_lng = COALESCE($4, map_center_lng),
-         default_zoom = COALESCE($5, default_zoom),
-         status = COALESCE($6, status),
-         updated_at = NOW()
-       WHERE id = $1 RETURNING *`,
-      [req.params.id, name, mapCenterLat, mapCenterLng, defaultZoom, status]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Site not found' });
-    await logAction({ req, action: 'UPDATE', tableName: 'sites', recordId: rows[0].id,
-      siteId: rows[0].id, oldValues: before.rows[0], newValues: rows[0] });
-    res.json({ site: rows[0] });
+
+    // The site fields, its user assignments and its parcel sheet are saved by one
+    // dialog, so they are recorded as one UPDATE. Editing only the parcel list
+    // used to write two rows: a site row with nothing changed in it, and a
+    // separate parcel row.
+    let beforeUserIds = null;
+    const updated = await withTransaction(async (client) => {
+      if (userIds) {
+        const cur = await client.query('SELECT user_id FROM user_sites WHERE site_id = $1', [req.params.id]);
+        beforeUserIds = cur.rows.map((r) => r.user_id);
+        await client.query('DELETE FROM user_sites WHERE site_id = $1', [req.params.id]);
+        for (const userId of userIds) {
+          await client.query(
+            `INSERT INTO user_sites (user_id, site_id) VALUES ($1,$2)
+             ON CONFLICT (user_id, site_id) DO NOTHING`,
+            [userId, req.params.id]
+          );
+        }
+      }
+      const { rows } = await client.query(
+        `UPDATE sites SET
+           name = COALESCE($2, name),
+           map_center_lat = COALESCE($3, map_center_lat),
+           map_center_lng = COALESCE($4, map_center_lng),
+           default_zoom = COALESCE($5, default_zoom),
+           status = COALESCE($6, status),
+           updated_at = NOW()
+         WHERE id = $1 RETURNING *`,
+        [req.params.id, name, mapCenterLat, mapCenterLng, defaultZoom, status]
+      );
+      return rows[0];
+    });
+    if (!updated) return res.status(404).json({ error: 'Site not found' });
+
+    let parcelResult = null;
+    let parcelError = null;
+    if (req.file) {
+      try {
+        const imported = await importParcels({ siteId: req.params.id, buffer: req.file.buffer });
+        if (imported.ok) parcelResult = imported;
+        else parcelError = imported.body.error;
+      } catch (err) {
+        console.error('Error importing parcel XLSX during site update:', err);
+        parcelError = PARCEL_PARSE_ERROR;
+      }
+    }
+
+    // Both sides carry the same keys so the diff compares like-for-like and the
+    // log names exactly what this save changed.
+    const auditSide = async (row, ids, parcels) => resolveAuditValues({
+      ...row,
+      map_center_lat: row.map_center_lat != null ? Number(row.map_center_lat) : null,
+      map_center_lng: row.map_center_lng != null ? Number(row.map_center_lng) : null,
+      ...(ids ? { userIds: ids } : {}),
+      ...(parcels ? { parcels } : {}),
+    });
+    const oldValues = await auditSide(before.rows[0], beforeUserIds, parcelResult?.oldParcels);
+    const newValues = await auditSide(updated, userIds, parcelResult?.newParcels);
+    if (parcelError) newValues.parcelError = parcelError;
+
+    await logAction({ req, action: 'UPDATE', tableName: 'sites', recordId: updated.id,
+      siteId: updated.id, oldValues, newValues });
+    res.json({
+      site: updated,
+      ...(parcelResult ? { parcels: parcelResult.response } : {}),
+      ...(parcelError ? { parcelError } : {}),
+    });
   } catch (err) {
     next(err);
   }

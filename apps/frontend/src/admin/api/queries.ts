@@ -92,11 +92,27 @@ export function useInfiniteSites(limit: number = 5, search: string = '') {
 }
 
 
+// A site save carries its fields, its user assignments and — when one was picked
+// — a parcel sheet. Sending them together makes the whole save one action, and
+// one audit entry. A file forces multipart; otherwise it stays a plain JSON body.
+type SiteBody = Record<string, unknown> & { file?: File | null };
+
+function siteRequest(path: string, method: 'POST' | 'PUT', { file, ...body }: SiteBody) {
+  if (!file) return api(path, { method, body: JSON.stringify(body) });
+  const form = new FormData();
+  Object.entries(body).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    // Arrays and objects go over as JSON; the server parses them back.
+    form.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+  });
+  form.append('file', file);
+  return api(path, { method, body: form });
+}
+
 export function useCreateSite() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      api('/api/sites', { method: 'POST', body: JSON.stringify(body) }),
+    mutationFn: (body: SiteBody) => siteRequest('/api/sites', 'POST', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin_sites'] }),
   });
 }
@@ -104,8 +120,8 @@ export function useCreateSite() {
 export function useUpdateSite() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
-      api(`/api/sites/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    mutationFn: ({ id, body }: { id: number; body: SiteBody }) =>
+      siteRequest(`/api/sites/${id}`, 'PUT', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin_sites'] }),
   });
 }

@@ -2,10 +2,16 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 
+interface Option { id: number; name: string }
+
 interface MultiSelectProps {
-  options: { id: number; name: string }[];
+  options: Option[];
   selectedIds: number[];
   onChange: (ids: number[]) => void;
+  // Names for already-selected ids that `options` may not contain yet — an
+  // assignment sitting on a later page, or one the active search filters out.
+  // Without these, such a selection has no label to render on first paint.
+  selectedOptions?: Option[];
   placeholder?: string;
   openDirection?: 'up' | 'down';
   onSearchChange?: (search: string) => void;
@@ -18,6 +24,7 @@ export function MultiSelect({
   options,
   selectedIds,
   onChange,
+  selectedOptions,
   placeholder = 'Select sites...',
   openDirection = 'down',
   onSearchChange,
@@ -26,8 +33,10 @@ export function MultiSelect({
   isLoading,
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [localSearch, setLocalSearch] = useState('');
-  const searchQuery = onSearchChange ? '' : localSearch;
+  // One source of truth for the search box, whether filtering happens here or
+  // on the server. Previously the input was left uncontrolled in server-search
+  // mode, so its text and the clear button were unbound from any state.
+  const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // Fixed-position coords so the menu escapes any overflow-clipping ancestor
@@ -79,14 +88,33 @@ export function MultiSelect({
 
   const filteredOptions = useMemo(() => {
     if (onSearchChange) return options; // If server-side search is provided, options are already filtered
-    if (!searchQuery) return options;
-    const lower = searchQuery.toLowerCase();
-    return options.filter((opt: { name: string }) => opt.name.toLowerCase().includes(lower));
-  }, [options, searchQuery, onSearchChange]);
+    if (!search) return options;
+    const lower = search.toLowerCase();
+    return options.filter((opt) => opt.name.toLowerCase().includes(lower));
+  }, [options, search, onSearchChange]);
 
-  const selectedOptions = useMemo(() => {
-    return options.filter((opt: { id: number }) => selectedIds.includes(opt.id));
-  }, [options, selectedIds]);
+  function updateSearch(value: string) {
+    setSearch(value);
+    onSearchChange?.(value);
+  }
+
+  // Every name seen so far, kept across renders. `options` is a moving window —
+  // it holds one page of a paginated list and shrinks to the matches while a
+  // server-side search is active — so deriving the chips from it alone made a
+  // selected site's chip vanish as soon as it dropped out of that window, even
+  // though the selection itself was still held in `selectedIds`.
+  const labelCache = useRef(new Map<number, string>());
+  useMemo(() => {
+    for (const opt of selectedOptions ?? []) labelCache.current.set(opt.id, opt.name);
+    for (const opt of options) labelCache.current.set(opt.id, opt.name);
+  }, [options, selectedOptions]);
+
+  const selectedChips = useMemo(
+    () => selectedIds.map((id) => ({ id, name: labelCache.current.get(id) ?? String(id) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the cache is filled
+    // from options/selectedOptions above, so both belong in this dependency list.
+    [selectedIds, options, selectedOptions]
+  );
 
   function toggleOption(id: number) {
     if (selectedIds.includes(id)) {
@@ -119,10 +147,10 @@ export function MultiSelect({
         className="flex min-h-[40px] w-full items-center justify-between rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm cursor-pointer hover:border-ring/50 focus:outline-none focus:ring-2 focus:ring-ring/40 transition-all duration-150"
       >
         <div className="flex flex-wrap gap-1 pr-4">
-          {selectedOptions.length === 0 ? (
+          {selectedChips.length === 0 ? (
             <span className="text-muted-foreground">{placeholder}</span>
           ) : (
-            selectedOptions.map((opt) => (
+            selectedChips.map((opt) => (
               <span
                 key={opt.id}
                 className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground border border-primary/10 transition-all hover:bg-accent/80"
@@ -163,28 +191,16 @@ export function MultiSelect({
             <Search size={14} className="text-muted-foreground shrink-0" />
             <input
               type="text"
-              value={onSearchChange ? undefined : localSearch}
-              onChange={(e) => {
-                if (onSearchChange) {
-                  onSearchChange(e.target.value);
-                } else {
-                  setLocalSearch(e.target.value);
-                }
-              }}
+              value={search}
+              onChange={(e) => updateSearch(e.target.value)}
               placeholder="Search..."
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               autoFocus
             />
-            {searchQuery && (
+            {search && (
               <button
                 type="button"
-                onClick={() => {
-                  if (onSearchChange) {
-                    onSearchChange('');
-                  } else {
-                    setLocalSearch('');
-                  }
-                }}
+                onClick={() => updateSearch('')}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X size={14} />

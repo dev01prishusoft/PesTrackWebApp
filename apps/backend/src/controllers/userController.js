@@ -185,8 +185,18 @@ async function createUser(req, res, next) {
       return created;
     });
 
-    await logAction({ req, action: 'CREATE', tableName: 'users', recordId: user.id,
-      newValues: { username, email, role: effectiveRole, isActive: isActive !== false, siteIds: effectiveRole === 'admin' ? [] : (siteIds || []) } });
+    // Same field set and resolution as updateUser, so a user's CREATE row reads
+    // like the UPDATE rows that follow it: fullName included, and site ids turned
+    // into site names rather than logged as opaque UUIDs.
+    const newValues = await resolveAuditValues({
+      username,
+      email,
+      fullName: fullName || null,
+      role: effectiveRole,
+      isActive: isActive !== false,
+      siteIds: effectiveRole === 'admin' ? [] : (siteIds || []),
+    });
+    await logAction({ req, action: 'CREATE', tableName: 'users', recordId: user.id, newValues });
     res.status(201).json({ user });
   } catch (err) {
     next(err);
