@@ -24,10 +24,9 @@ function EntryRouter() {
   const { user, loading } = useAuth();
   
   if (loading) return null;
-  if (!user) return <Navigate to="/admin/login" replace />;
-  if (user.role === 'admin') return <Navigate to="/admin/users" replace />;
-  
-  // Non-admins should use the map app, not the React dashboard
+  // Admins go to the React admin app; everyone else (including logged-out) uses
+  // the employee PesTrack.html app, which shows its own login when needed.
+  if (user?.role === 'admin') return <Navigate to="/admin/users" replace />;
   window.location.replace('/PesTrack.html');
   return null;
 }
