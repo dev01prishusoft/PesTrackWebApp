@@ -1,0 +1,2198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PesTrack Site Visit Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  :root { --green:#1e7a3c; --blue:#3d5fa8; --lime:#8bc63f; --bg:#f2f4f7; --card:#ffffff; --border:#dde3ea; --text:#22303e; --muted:#6b7a89;
+    --critical:#d63031; --high:#e17055; --medium:#fdcb6e; --low:#00b894; }
+  body { background:var(--bg); color:var(--text); }
+  .app { max-width:480px; margin:0 auto; min-height:100vh; background:var(--bg); position:relative; padding-bottom:90px; }
+  .screen { display:none; }
+  .screen.active { display:block; }
+
+  /* Brand */
+  .brand { display:flex; align-items:center; justify-content:center; gap:6px; font-weight:800; letter-spacing:.5px; }
+  .brand .sot { color:var(--green); font-size:22px; }
+  .brand .pin { color:var(--blue); font-size:24px; }
+  .brand .pes { color:var(--blue); font-size:22px; }
+
+  /* Header */
+  header { background:var(--card); border-bottom:1px solid var(--border); padding:14px 16px; position:sticky; top:0; z-index:50; }
+  header .sub { text-align:center; color:var(--muted); font-size:11px; margin-top:2px; }
+
+  .container { padding:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card h3 { font-size:14px; color:var(--blue); text-transform:uppercase; letter-spacing:.6px; margin-bottom:12px; border-bottom:2px solid var(--lime); padding-bottom:6px; }
+  label { display:block; font-size:12.5px; font-weight:600; color:var(--muted); margin:10px 0 4px; }
+  input[type=text], input[type=time], input[type=number], input[type=password], select, textarea {
+    width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:10px; font-size:15px; background:#fbfcfe; }
+  textarea { min-height:80px; resize:vertical; }
+  .row { display:flex; gap:10px; } .row > div { flex:1; }
+
+  .btn { display:block; width:100%; padding:14px; border:none; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer; text-align:center; }
+  .btn-primary { background:var(--green); color:#fff; }
+  .btn-blue { background:var(--blue); color:#fff; }
+  .btn-outline { background:#fff; color:var(--blue); border:2px solid var(--blue); }
+  .btn-danger { background:#fff; color:var(--critical); border:2px solid var(--critical); }
+  .btn-sm { width:auto; padding:8px 14px; font-size:13px; display:inline-block; }
+  .btn:active { opacity:.85; }
+  .mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
+
+  /* pest grid */
+  .pests { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .pest { display:flex; align-items:center; gap:8px; background:#fbfcfe; border:1px solid var(--border); border-radius:10px; padding:9px 10px; font-size:13.5px; }
+  .pest input { width:18px; height:18px; }
+
+  /* visit type */
+  .segment { display:flex; flex-wrap:wrap; gap:6px; }
+  .segment button { flex:1 1 30%; padding:10px 4px; border:1px solid var(--border); background:#fbfcfe; border-radius:10px; font-size:12.5px; font-weight:600; color:var(--muted); cursor:pointer; }
+  .segment button.sel { background:var(--blue); color:#fff; border-color:var(--blue); }
+
+  /* observations */
+  .obs-item { border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; background:#fbfcfe; }
+  .obs-item.editing { border:2px solid var(--blue); }
+  .obs-head { display:flex; justify-content:space-between; align-items:center; }
+  .badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; color:#fff; }
+  .b-Critical{background:var(--critical)} .b-High{background:var(--high)} .b-Medium{background:var(--medium);color:#5c4a00} .b-Low{background:var(--low)}
+  .thumbs { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .thumbs img { width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--border); }
+  .del { color:var(--critical); background:none; border:none; font-size:13px; font-weight:600; cursor:pointer; }
+  .edit { color:var(--blue); background:none; border:none; font-size:13px; font-weight:600; cursor:pointer; margin-right:12px; }
+  .obs-actions { margin-top:6px; }
+  .edit-note { background:#eef3fd; border:1px solid var(--blue); color:var(--blue); border-radius:10px; padding:8px 10px; font-size:12.5px; font-weight:600; margin-top:10px; display:none; }
+  .edit-note.show { display:block; }
+
+  /* lists */
+  .line-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px dashed var(--border); font-size:14px; }
+  .line-item:last-child { border-bottom:none; }
+
+  /* signature */
+  .sig-status { font-size:12.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+  .sig-done { color:var(--green); font-weight:700; }
+  .sig-modal { position:fixed; inset:0; background:rgba(15,25,35,.55); z-index:200; display:none; align-items:flex-end; }
+  .sig-modal.open { display:flex; }
+  .sig-sheet { background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:18px 18px 0 0; padding:16px; }
+  .sig-sheet h4 { color:var(--blue); margin-bottom:4px; }
+  .sig-sheet p { font-size:12.5px; color:var(--muted); margin-bottom:10px; }
+  #sigCanvas { width:100%; height:220px; border:2px dashed var(--border); border-radius:12px; touch-action:none; background:#fff; }
+  .sig-actions { display:flex; gap:8px; margin-top:12px; }
+  .sig-actions .btn { flex:1; }
+
+  /* summary */
+  .sum-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px dashed var(--border); font-size:13.5px; }
+  .sum-row span:first-child { color:var(--muted); }
+  .sum-row span:last-child { font-weight:600; text-align:right; max-width:60%; }
+  .sum-block { padding:8px 0; border-bottom:1px dashed var(--border); font-size:13.5px; }
+  .sum-block .lbl { color:var(--muted); margin-bottom:3px; }
+  .sum-block .val { font-weight:600; text-align:left; line-height:1.5; }
+  html[dir="rtl"], html[dir="rtl"] * { font-family:'Cairo', -apple-system, 'Segoe UI', sans-serif !important; }
+  html[dir="rtl"] .sum-block .val { text-align:right; }
+
+  /* home */
+  .welcome { text-align:center; padding:22px 16px 8px; }
+  .welcome .name { font-size:20px; font-weight:800; }
+  .welcome .role { color:var(--muted); font-size:13px; margin-top:2px; }
+  .stat { text-align:center; }
+  .stat .num { font-size:34px; font-weight:800; color:var(--green); }
+  .stat .lbl { color:var(--muted); font-size:12.5px; }
+
+  .report-row { padding:11px 0; border-bottom:1px dashed var(--border); font-size:13.5px; display:flex; justify-content:space-between; align-items:center; }
+  .report-row:last-child { border-bottom:none; }
+  .report-row .cust { font-weight:700; }
+  .report-row .when { color:var(--muted); font-size:12px; }
+
+  .footer-note { text-align:center; color:var(--muted); font-size:11px; padding:16px; }
+  .watermark { text-align:center; color:#b6bfc9; font-size:10.5px; letter-spacing:.4px; }
+
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--text); color:#fff; padding:11px 20px; border-radius:30px; font-size:14px; z-index:300; display:none; }
+
+  .login-wrap { padding:60px 24px 24px; }
+  .login-logo { margin-bottom:6px; }
+  .login-tag { text-align:center; color:var(--muted); font-size:13px; margin-bottom:30px; }
+  .err { color:var(--critical); font-size:13px; margin-top:8px; text-align:center; display:none; }
+
+  .lock-banner { background:#fdeaea; border:1px solid var(--critical); color:var(--critical); border-radius:10px; padding:10px 12px; font-size:13px; font-weight:600; margin-bottom:12px; display:none; }
+  .lock-banner.show { display:block; }
+
+  /* customer autocomplete */
+  .ac-wrap { position:relative; }
+  .ac-list { position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--border); border-radius:0 0 12px 12px; box-shadow:0 8px 20px rgba(20,40,60,.12); max-height:230px; overflow-y:auto; z-index:120; display:none; }
+  .ac-list.open { display:block; }
+  .ac-item { padding:11px 12px; font-size:14px; cursor:pointer; border-bottom:1px dashed var(--border); }
+  .ac-item:last-child { border-bottom:none; }
+  .ac-item:hover, .ac-item:active { background:#eef3fd; }
+  .ac-item .ac-sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .ac-item b { color:var(--blue); }
+  .ac-empty { padding:11px 12px; font-size:13px; color:var(--muted); }
+  .ac-arrow { position:absolute; right:5px; top:5px; height:34px; width:36px; border:none; background:var(--blue); color:#fff; border-radius:8px; font-size:14px; cursor:pointer; z-index:2; }
+
+  /* PHASE 3B — plan receiver cards */
+  .plan-visit { border:1px solid var(--border); border-radius:12px; padding:11px 12px; margin-bottom:9px; background:#fbfcfe; cursor:pointer; }
+  .plan-visit:active { opacity:.85; }
+  .plan-visit.done { background:#f2fbf6; border-color:var(--low); }
+  .pv-top { display:flex; align-items:center; gap:8px; }
+  .pv-seq { flex:0 0 24px; height:24px; line-height:24px; text-align:center; border-radius:50%; background:var(--blue); color:#fff; font-weight:800; font-size:12.5px; }
+  .plan-visit.done .pv-seq { background:var(--low); }
+  .pv-cust { font-weight:700; flex:1; }
+  .pv-win { font-weight:700; color:var(--blue); font-size:13px; white-space:nowrap; }
+  .pv-sub { font-size:12px; color:var(--muted); margin-top:3px; }
+  .pv-bud { font-size:12px; color:var(--green); margin-top:3px; font-weight:600; }
+  .plan-upd { background:#fff9e8; border:1px solid var(--medium); color:#5c4a00; border-radius:10px; padding:8px 10px; font-size:12.5px; font-weight:700; margin-bottom:10px; }
+  .plan-removed { background:#fdeaea; border:1px solid var(--critical); color:var(--critical); border-radius:10px; padding:7px 10px; font-size:12px; font-weight:600; margin-bottom:10px; }
+  .plan-chg { display:inline-block; background:var(--high); color:#fff; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; }
+  .plan-joint { color:var(--blue); font-weight:700; }
+  .plan-guide { background:#f6f9ff; border:1px solid var(--blue); color:var(--blue); border-radius:10px; padding:8px 10px; font-size:12px; font-weight:600; margin-bottom:10px; }
+
+  /* real logo */
+  .logo-img { width:250px; max-width:72vw; height:44px; background:url("data:image/png;base64,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") no-repeat center / contain; }
+  .login-logo .logo-img { width:320px; height:78px; }
+</style>
+</head>
+<body>
+<button id="langBtn" onclick="toggleLang()" style="position:fixed;top:10px;right:10px;z-index:600;border:1.5px solid var(--blue);background:#fff;color:var(--blue);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(20,40,60,.12)">عربي</button>
+<div class="app">
+
+  <!-- ============ LOGIN ============ -->
+  <div class="screen active" id="scr-login">
+    <div class="login-wrap">
+      <div class="brand login-logo"><div class="logo-img"></div></div>
+      <div class="login-tag"><b>Site Visit Report</b><br>Confidential Prototype</div>
+      <div class="card">
+        <label>Pro Code</label>
+        <input type="text" id="loginCode" placeholder="e.g. Pro001" autocapitalize="none">
+        <label>Password</label>
+        <input type="password" id="loginPass" placeholder="****" inputmode="numeric">
+        <div class="err" id="loginErr">Invalid Pro Code or Password</div>
+        <button class="btn btn-primary mt16" onclick="doLogin()">Login</button>
+      </div>
+      <div class="watermark">© 2026 SOTAICO Pest Control — <b id="appVer"></b><br>Testing credentials: Pro001/1234 · Pro002/5678 · Pro003/9012 · Pro004/3456</div>
+    </div>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="screen" id="scr-home">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">Site Visit Report — Confidential Prototype (Test Data)</div>
+    </header>
+    <div class="welcome">
+      <div class="name" id="homeName"></div>
+      <div class="role" id="homeRole"></div>
+      <div style="margin-top:10px;display:flex;justify-content:center;align-items:center;gap:8px">
+        <span style="font-size:13px;color:var(--muted)">🚗 Car:</span>
+        <select id="homeCar" onchange="changeCar()" style="width:auto;padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:#fbfcfe"></select>
+      </div>
+    </div>
+    <div class="container">
+      <div class="card"><div class="stat"><div class="num" id="homeCount">0</div><div class="lbl">Visits submitted on this device</div></div></div>
+      <button class="btn btn-primary" onclick="startNewReport()">+ New Visit Report</button>
+      <div id="planCards"></div>
+      <div class="card mt16">
+        <h3>Past Reports <span style="font-weight:400;color:var(--muted)">(tap 📄 to reopen &amp; re-send)</span></h3>
+        <div id="homeReports"><div class="footer-note">No reports yet</div></div>
+      </div>
+      <button class="btn btn-danger mt8" onclick="doLogout()">Logout (clears this device)</button>
+      <div style="margin-top:44px;border-top:1px dashed var(--border);padding-top:18px;text-align:center">
+        <button class="btn btn-outline btn-sm" style="display:inline-block" onclick="exportAll()">🌙 End of Day Export — All Visits</button>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Once per day, before going home — send the file to HO</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ VISIT KIND (three doors) ============ -->
+  <div class="screen" id="scr-kind">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">New Visit — where are you?</div>
+    </header>
+    <div class="container" style="padding-top:40px">
+      <button class="btn btn-primary" style="padding:22px;font-size:17px" onclick="chooseKind('client')">🏢 Client Visit</button>
+      <button class="btn btn-blue mt12" style="padding:22px;font-size:17px" onclick="chooseKind('wh')">📦 SOTAICO W/H</button>
+      <button class="btn btn-outline mt12" style="padding:22px;font-size:17px" onclick="chooseKind('other')">🚗 Other Work Activity</button>
+      <button class="btn btn-outline mt16" onclick="show('scr-home')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ============ OTHER WORK ACTIVITY ============ -->
+  <div class="screen" id="scr-other">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">Other Work Activity</div>
+    </header>
+    <div class="container">
+      <div class="card">
+        <h3>Activity</h3>
+        <label>Type <span style="color:var(--critical)">*</span></label>
+        <select id="oaActivity" onchange="document.getElementById('oaOtherWrap').style.display=this.value==='Other'?'block':'none'">
+          <option value="">— Select activity —</option>
+          <option value="HO Meeting">HO Meeting</option>
+          <option value="Car Maintenance">Car Maintenance</option>
+          <option value="Training">Training</option>
+          <option value="Other">Other</option>
+        </select>
+        <div id="oaOtherWrap" style="display:none">
+          <label>Describe <span style="color:var(--critical)">*</span></label>
+          <input type="text" id="oaOther" placeholder="Short description">
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div><label>Time IN <span style="color:var(--critical)">*</span></label><input type="time" id="oaTimeIn"></div>
+          <div><label>Time OUT <span style="color:var(--critical)">*</span></label><input type="time" id="oaTimeOut"></div>
+        </div>
+        <label>Odometer on Arrival (km) <span style="color:var(--critical)">*</span></label>
+        <input type="text" inputmode="numeric" id="oaOdo" placeholder="e.g. 45,280" oninput="fmtOdo(this)">
+        <label>Comment (optional)</label>
+        <input type="text" id="oaNote" placeholder="e.g. monthly ops meeting">
+      </div>
+      <div class="card">
+        <h3>Pro Signature</h3>
+        <button class="btn btn-blue" id="oaSigBtn" onclick="openSig('pro')">&#9998; Sign</button>
+        <div class="sig-status" id="oaSigStatus">Not signed yet</div>
+      </div>
+      <button class="btn btn-primary" onclick="otherSubmit()">Submit Activity</button>
+      <button class="btn btn-outline mt8" onclick="show('scr-kind')">&#8592; Back</button>
+    </div>
+  </div>
+
+  <!-- ============ SECTION A ============ -->
+  <div class="screen" id="scr-a">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">Site Visit Report — Section A (Pro Only)</div>
+    </header>
+    <div class="container">
+
+      <div class="card">
+        <h3 id="custCardTitle">Customer Details</h3>
+        <div id="custFields">
+        <div id="custSearchWrap">
+        <label>Customer (type to search, or tap ▾ to browse)</label>
+        <div class="ac-wrap">
+          <input type="text" id="fCustomer" placeholder="Type customer name…" autocomplete="off" oninput="custSearch()" onfocus="custSearch()" style="padding-right:44px">
+          <button class="ac-arrow" onclick="custBrowseAll(event)">▾</button>
+          <div class="ac-list" id="custList"></div>
+        </div>
+        <label>Customer #</label>
+        <input type="text" id="fCustNo" readonly>
+        <label>Address</label>
+        <input type="text" id="fCustAddr" readonly>
+        </div>
+        <div id="woFields" style="display:none">
+        <div style="background:#eef3fd;border:1px solid var(--blue);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--blue);font-weight:600;margin-bottom:4px">Work Order — client may not be in the system. Enter details manually.</div>
+        <label>Work Order # <span style="font-weight:400;color:var(--muted)">(optional — from Customer Service)</span></label>
+        <input type="text" id="woNum" placeholder="e.g. 1042">
+        <label>Client Name <span style="color:var(--critical)">*</span></label>
+        <input type="text" id="woName" placeholder="Client / company name">
+        <label>Address <span style="color:var(--critical)">*</span></label>
+        <input type="text" id="woAddr" placeholder="Full address">
+        </div>
+        <label>Client Representative Name <span style="color:var(--critical)">*</span></label>
+        <input type="text" id="fClientRep" placeholder="e.g. Ahmed Hassan (person who will sign)">
+        <label>Email or Phone <span style="color:var(--critical)">*</span></label>
+        <div class="row">
+          <div><label style="font-size:11px;color:var(--muted)">Email</label><input type="email" id="fClientEmail" placeholder="name@company.com"></div>
+          <div><label style="font-size:11px;color:var(--muted)">Phone</label><input type="tel" id="fClientPhone" placeholder="+20 100 123 4567"></div>
+        </div>
+        </div>
+        <div id="whFields" style="display:none">
+        <label>Warehouse <span style="color:var(--critical)">*</span></label>
+        <select id="fWhSelect" onchange="fillWarehouse()"></select>
+        <label>Warehouse Manager</label>
+        <input type="text" id="fWhManager" readonly>
+        <label>Manager Phone</label>
+        <input type="tel" id="fWhPhone" readonly>
+        </div>
+        <label>Governorate</label>
+        <input type="text" id="fGov" readonly placeholder="Auto-filled from customer record">
+        <select id="fGovSel" style="display:none"><option value="">— Select governorate —</option></select>
+        <label>Zone</label>
+        <input type="text" id="fZone" readonly placeholder="Auto-filled from customer record">
+        <select id="fZoneSel" style="display:none"><option value="">— Select zone —</option></select>
+      </div>
+
+      <div class="card">
+        <h3>Visit Info</h3>
+        <div class="row">
+          <div><label>Time IN <span style="color:var(--critical)">*</span></label><input type="time" id="fTimeIn" required></div>
+          <div><label>Time OUT <span style="color:var(--critical)">*</span></label><input type="time" id="fTimeOut" required></div>
+        </div>
+        <label>Odometer on Arrival (km) <span style="color:var(--critical)">*</span></label>
+        <input type="text" inputmode="numeric" id="fOdo" placeholder="e.g. 45,280" required oninput="fmtOdo(this)">
+        <div id="vtBlock">
+        <label>Visit Type</label>
+        <div class="segment" id="fVisitType">
+          <button data-v="Contractual" onclick="selVisit(this);updateWoMode()">Contractual</button>
+          <button data-v="Follow-up" onclick="selVisit(this);updateWoMode()">Follow-up</button>
+          <button data-v="Call-out" onclick="selVisit(this);updateWoMode()">Call-out</button>
+          <button data-v="Work Order" onclick="selVisit(this);updateWoMode()">Work Order</button>
+          <button data-v="Site Audit" onclick="selVisit(this);updateWoMode()">Site Audit</button>
+          <button data-v="Other" onclick="selVisit(this);updateWoMode()">Other</button>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Tip: selecting <b>Site Audit</b> allows one additional type.</div>
+        </div>
+      </div>
+
+      <div class="card" id="cardPests">
+        <h3>Pests Addressed</h3>
+        <div class="pests" id="fPests"></div>
+        <div id="pestSubs"></div>
+      </div>
+
+      <div class="card" id="cardWork">
+        <h3>Description of Work</h3>
+        <div class="field-with-mic">
+          <textarea id="fWork" placeholder="Describe the work performed..."></textarea>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:5px">💡 Tip: dictate with the 🎤 on your phone keyboard — works in English &amp; Arabic in every text box</div>
+      </div>
+
+      <div class="card">
+        <h3>Visit Comments <span style="font-weight:400;color:var(--muted)">(appears on client report)</span></h3>
+        <div class="field-with-mic">
+          <textarea id="fComments" placeholder="e.g. Client requested earlier visits · Next visit to be scheduled for … · No one on site, visit cancelled · Gate code changed…"></textarea>
+        </div>
+      </div>
+
+      <div class="card" id="cardObs">
+        <h3>Observations / Recommendations <span style="font-weight:400;color:var(--muted)">(optional)</span></h3>
+        <div id="obsList"></div>
+        <div style="border-top:2px solid #a8b4c0;margin:16px 0 12px"></div>
+        <div class="edit-note" id="editNote">Editing observation — make changes below, then tap "Update Observation"</div>
+        <label>Title</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="obsNumLabel" style="font-size:22px;font-weight:800;color:var(--green);min-width:44px;text-align:center">#1</span>
+          <div class="field-with-mic" style="flex:1">
+            <input type="text" id="oTitle" placeholder="e.g. Gap under kitchen door">
+          </div>
+        </div>
+        <label>Location</label>
+        <input type="text" id="oLoc" placeholder="e.g. Back kitchen">
+        <div class="field-with-mic">
+          <label>Description</label>
+          <textarea id="oDesc" placeholder="Details..."></textarea>
+        </div>
+        <label>Urgency</label>
+        <select id="oUrg"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option></select>
+        <label>Photos (up to 3 — tap a photo to remove it)</label>
+        <div class="row">
+          <div><button type="button" class="btn btn-blue btn-sm" style="width:100%" onclick="document.getElementById('oPhotosCam').click()">📷 Take Photo</button></div>
+          <div><button type="button" class="btn btn-outline btn-sm" style="width:100%" onclick="document.getElementById('oPhotos').click()">🖼 From Library</button></div>
+        </div>
+        <input type="file" id="oPhotosCam" accept="image/*" capture="environment" style="display:none">
+        <input type="file" id="oPhotos" accept="image/*" multiple style="display:none">
+        <div class="thumbs" id="oThumbs"></div>
+        <button class="btn btn-blue mt12" id="obsAddBtn" onclick="addObs()">+ Add Observation</button>
+        <button class="btn btn-outline mt8" id="obsCancelBtn" onclick="cancelEditObs()" style="display:none">Cancel Edit</button>
+      </div>
+
+      <div class="card" id="cardRes">
+        <h3>Resources</h3>
+        <div id="planGuide" class="plan-guide" style="display:none"></div>
+        <div id="consList"></div>
+        <div class="row">
+          <div style="flex:2"><label>Product</label>
+            <select id="cProd" onchange="fillUnit()"><option value="">— Select —</option></select></div>
+          <div><label>Qty</label><input type="number" id="cQty" step="0.1" oninput="cMethod='manual';cDetail='';cEstimated=false;document.querySelectorAll('#cChipBtns button,#cPkgBtns button').forEach(b=>b.classList.remove('sel'))"></div>
+        </div>
+        <label>Unit</label><input type="text" id="cUnit" readonly>
+        <div id="cPkgWrap" style="display:none;margin-top:8px">
+          <div style="font-size:11.5px;color:var(--muted);margin-bottom:5px">Which container was used?</div>
+          <div class="segment" id="cPkgBtns"></div>
+        </div>
+        <div id="cChips" style="display:none;margin-top:8px">
+          <div style="font-size:11.5px;color:var(--muted);margin-bottom:5px" id="cChipsLbl"></div>
+          <div class="segment" id="cChipBtns"></div>
+        </div>
+        <button class="btn btn-outline btn-sm mt8" onclick="addCons()">+ Add Product</button>
+
+        <div id="techList" class="mt12"></div>
+        <label>Technician</label>
+        <select id="tSel" onchange="document.getElementById('tOtherWrap').style.display=this.value==='OTHER'?'block':'none'"><option value="">— Select technician —</option></select>
+        <div id="tOtherWrap" style="display:none">
+          <label>New technician name <span style="color:var(--critical)">*</span></label>
+          <input type="text" id="tOtherName" placeholder="Full name (not in the list)">
+        </div>
+        <button class="btn btn-outline btn-sm mt8" onclick="addTech()">+ Add Technician</button>
+
+        <label class="mt12">Other (amount & description)</label>
+        <input type="text" id="fOther" placeholder="e.g. 50 EGP parking">
+      </div>
+
+      <div class="card" id="cardWhMove" style="display:none">
+        <h3>Materials &amp; Equipment Movement</h3>
+        <div id="whMoveList"></div>
+        <div class="row" style="margin-top:10px">
+          <div><label>Direction</label><select id="whDir"><option value="Taken">Taken</option><option value="Returned">Returned</option></select></div>
+          <div><label>Type</label><select id="whType" onchange="fillWhItems()"><option value="Supplies">Supplies</option><option value="Equipment">Equipment</option></select></div>
+        </div>
+        <label>Item</label>
+        <select id="whItem" onchange="fillWhUnit()"></select>
+        <div class="row">
+          <div><label>Qty</label><input type="number" id="whQty" step="0.1"></div>
+          <div><label>Unit</label><input type="text" id="whUnit" readonly></div>
+        </div>
+        <button class="btn btn-outline btn-sm mt8" onclick="addWhMove()">+ Add Item</button>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:8px">The Warehouse Manager's signature confirms these quantities.</div>
+      </div>
+
+      <button class="btn btn-primary" onclick="gotoB()">Review &amp; Submit Section A</button>
+      <button class="btn btn-outline mt8" onclick="show('scr-home')">Cancel</button>
+      <div class="watermark mt12">© 2026 SOTAICO — Confidential Prototype</div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION B ============ -->
+  <div class="screen" id="scr-b">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">Pro Review — PRIVATE (do not hand to client yet)</div>
+    </header>
+    <div class="container">
+      <div class="card">
+        <h3>Visit Summary</h3>
+        <div id="sumBox"></div>
+      </div>
+      <div class="card">
+        <h3>Observations &amp; Recommendations</h3>
+        <div id="sumObs"><div class="footer-note">None recorded</div></div>
+      </div>
+      <div class="card" id="sumResCard">
+        <h3>Resources Used <span style="font-weight:400;color:var(--critical)">(internal — client will NOT see this)</span></h3>
+        <div id="sumRes"><div class="footer-note">None recorded</div></div>
+      </div>
+      <div class="card" id="intNotesCard">
+        <h3>Internal Notes <span style="font-weight:400;color:var(--muted)">(HO only — never shown to client)</span></h3>
+        <div class="field-with-mic">
+          <textarea id="fInternalNotes" placeholder="For HO eyes only, e.g. client unhappy with pricing · access difficulties · watch this site…"></textarea>
+        </div>
+      </div>
+      <button class="btn btn-outline" id="backToABtn" onclick="backToA()">&#9998; Edit Report (back to Section A)</button>
+      <button class="btn btn-outline mt8" id="previewBtn" onclick="previewPdf()">👁 Preview Client PDF</button>
+      <button class="btn btn-primary mt8" id="toSignoffBtn" onclick="goToSignoff()">Continue to Customer Sign-off &#8594;</button>
+      <div class="watermark mt12">© 2026 SOTAICO — Confidential Prototype</div>
+    </div>
+  </div>
+
+  <!-- ============ CUSTOMER SIGN-OFF (client-facing) ============ -->
+  <div class="screen" id="scr-c">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub" id="signoffSub">Site Visit Report — Customer Sign-off</div>
+    </header>
+    <div class="container">
+      <div class="lock-banner" id="lockBanner">🔒 Customer has signed — the report is locked for editing.</div>
+      <div class="card">
+        <h3>Visit Summary</h3>
+        <div id="sumBoxC"></div>
+      </div>
+      <div class="card">
+        <h3>Observations &amp; Recommendations</h3>
+        <div id="sumObsC"><div class="footer-note">None recorded</div></div>
+      </div>
+      <div class="card">
+        <h3 id="custSigCardTitle">Customer Signature</h3>
+        <button class="btn btn-blue" id="custSigBtn" onclick="openSig('customer')">&#9998; Capture Customer Signature</button>
+        <div class="sig-status" id="custSigStatus"></div>
+      </div>
+      <div class="card">
+        <h3>Pro Signature</h3>
+        <button class="btn btn-blue" id="proSigBtn" onclick="openSig('pro')">&#9998; Capture Pro Signature</button>
+        <div class="sig-status" id="proSigStatus"></div>
+      </div>
+      <button class="btn btn-outline" onclick="show('scr-b')">&#8592; Back to Pro Review</button>
+      <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:10px">The report submits automatically once both signatures are captured.</div>
+      <div class="watermark mt12">© 2026 SOTAICO — Confidential Prototype</div>
+    </div>
+  </div>
+
+  <!-- signature modal -->
+  <div class="sig-modal" id="sigModal">
+    <div class="sig-sheet">
+      <h4 id="sigTitle">Signature</h4>
+      <p>Sign below with your finger (or mouse). Date, time &amp; GPS are captured automatically.</p>
+      <canvas id="sigCanvas"></canvas>
+      <div class="sig-status" id="sigGps">&#128205; Getting location…</div>
+      <div class="sig-actions">
+        <button class="btn btn-primary" onclick="saveSig()">Save</button>
+        <button class="btn btn-outline" onclick="clearSig()">Clear</button>
+        <button class="btn btn-outline" onclick="closeSig()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MY SCHEDULE (multi-day) ============ -->
+  <div class="screen" id="scr-schedule">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">My Schedule</div>
+    </header>
+    <div class="container">
+      <div id="schedList"></div>
+      <button class="btn btn-outline mt8" onclick="show('scr-home')">&#8592; Back</button>
+      <div class="watermark mt12">© 2026 SOTAICO — Confidential Prototype</div>
+    </div>
+  </div>
+
+  <!-- ============ WAREHOUSE PICKUP (range) ============ -->
+  <div class="screen" id="scr-pickup">
+    <header>
+      <div class="brand"><div class="logo-img"></div></div>
+      <div class="sub">Warehouse Pickup</div>
+    </header>
+    <div class="container">
+      <div class="card">
+        <h3>📦 Pickup horizon</h3>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Grabbing a load for the days ahead? Pick how far to cover — totals aggregate across those days.</div>
+        <div class="segment" id="pickRange">
+          <button data-d="1" class="sel" onclick="pickRangeSel(this)">Today</button>
+          <button data-d="2" onclick="pickRangeSel(this)">+ Tomorrow</button>
+          <button data-d="3" onclick="pickRangeSel(this)">3 days</button>
+          <button data-d="99" onclick="pickRangeSel(this)">All received</button>
+        </div>
+        <div id="pickInfo" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <h3>Materials &amp; Equipment <span style="font-weight:400;color:var(--muted)">(lead crew · +10% on liquids)</span></h3>
+        <div id="pickList"></div>
+      </div>
+      <button class="btn btn-primary" onclick="startWhFromPickup()">📦 Start Warehouse visit — pre-fill Taken</button>
+      <button class="btn btn-outline mt8" onclick="show('scr-home')">&#8592; Back</button>
+      <div class="watermark mt12">© 2026 SOTAICO — Confidential Prototype</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ================= LANGUAGE (bilingual EN/AR) ================= */
+let LANG = localStorage.getItem('pt_lang')||'en';
+const AR = {
+"Site Visit Report":"تقرير زيارة الموقع","Confidential Prototype":"نموذج تجريبي سري","Login":"تسجيل الدخول",
+"Pro Code":"كود المهندس","Password":"كلمة السر","Invalid Pro Code or Password":"كود المهندس أو كلمة السر غير صحيحة",
+"Testing mode":"وضع الاختبار","Visits submitted on this device":"الزيارات المسجلة على هذا الجهاز",
+"+ New Visit Report":"+ تقرير زيارة جديد","Past Reports":"التقارير السابقة","(tap 📄 to reopen & re-send)":"(اضغط 📄 لإعادة الفتح والإرسال)",
+"No reports yet":"لا توجد تقارير بعد","Logout (clears this device)":"تسجيل الخروج (يمسح بيانات الجهاز)",
+"🌙 End of Day Export — All Visits":"🌙 تصدير نهاية اليوم — كل الزيارات",
+"Once per day, before going home — send the file to HO":"مرة واحدة يوميًا قبل المغادرة — أرسل الملف للإدارة",
+"Car:":"السيارة:","Public transport / No car":"مواصلات عامة / بدون سيارة",
+"New Visit — where are you?":"زيارة جديدة — أين أنت؟","🏢 Client Visit":"🏢 زيارة عميل","📦 SOTAICO W/H":"📦 مخزن سوتايكو",
+"🚗 Other Work Activity":"🚗 نشاط عمل آخر","Cancel":"إلغاء",
+"Site Visit Report — Section A (Pro Only)":"تقرير زيارة الموقع — القسم أ (للمهندس فقط)",
+"Customer Details":"بيانات العميل","Warehouse Details":"بيانات المخزن",
+"Customer (type to search, or tap ▾ to browse)":"العميل (اكتب للبحث أو اضغط ▾ للتصفح)",
+"Type customer name…":"اكتب اسم العميل…","Customer #":"رقم العميل","Address":"العنوان",
+"Client Representative Name":"اسم ممثل العميل","Email or Phone":"البريد الإلكتروني أو الهاتف","Email":"البريد","Phone":"الهاتف",
+"Governorate":"المحافظة","Zone":"المنطقة","Auto-filled from customer record":"يُملأ تلقائيًا من سجل العميل",
+"— Select governorate —":"— اختر المحافظة —","— Select zone —":"— اختر المنطقة —","— Select customer —":"— اختر العميل —",
+"Warehouse":"المخزن","Warehouse Manager":"مدير المخزن","Manager Phone":"هاتف المدير",
+"Work Order — client may not be in the system. Enter details manually.":"أمر عمل — قد لا يكون العميل مسجلاً. أدخل البيانات يدويًا.",
+"Work Order #":"رقم أمر العمل","(optional — from Customer Service)":"(اختياري — من خدمة العملاء)","Client Name":"اسم العميل",
+"Full address":"العنوان بالكامل","Client / company name":"اسم العميل / الشركة",
+"Visit Info":"بيانات الزيارة","Time IN":"وقت الدخول","Time OUT":"وقت الخروج",
+"Odometer on Arrival (km)":"عداد الكيلومترات عند الوصول (كم)","Visit Type":"نوع الزيارة",
+"Contractual":"تعاقدية","Follow-up":"متابعة","Call-out":"استدعاء","Work Order":"أمر عمل","Site Audit":"تدقيق موقع","Other":"أخرى",
+"SOTAICO W/H":"مخزن سوتايكو",
+"Tip: selecting Site Audit allows one additional type.":"ملحوظة: اختيار تدقيق موقع يسمح باختيار نوع إضافي واحد.",
+"Pests Addressed":"الآفات المعالجة",
+"Rodents":"قوارض","Cockroaches":"صراصير","Ants":"نمل","Flies":"ذباب","Mosquitoes":"ناموس","Bedbugs":"بق الفراش",
+"Fleas":"براغيث","Ticks":"قراد","Snakes/scorpions":"ثعابين/عقارب","Lizards":"أبراص","Birds":"طيور","Weasels":"ابن عرس","Wild animals":"حيوانات برية",
+"Space spray":"رش الأماكن","Drain spray":"رش البلاعات","Space baiting":"طُعم الأماكن","IGR":"منظم نمو الحشرات",
+"Above ground":"فوق سطح الأرض","Drains/manholes":"بلاعات/غرف تفتيش",
+"Service Type":"نوع الخدمة","(select all that apply)":"(اختر كل ما ينطبق)",": select at least one service type":": اختر نوع خدمة واحدًا على الأقل",
+"Description of Work":"وصف الأعمال","Describe the work performed...":"صف الأعمال التي تمت...",
+"💡 Tip: dictate with the 🎤 on your phone keyboard — works in English & Arabic in every text box":"💡 نصيحة: استخدم 🎤 بلوحة مفاتيح هاتفك للإملاء — يعمل بالعربية والإنجليزية في كل الخانات",
+"Visit Comments":"ملاحظات الزيارة","(appears on client report)":"(تظهر في تقرير العميل)",
+"Observations / Recommendations":"ملاحظات / توصيات","(optional)":"(اختياري)",
+"Title":"العنوان","Location":"المكان","Description":"الوصف","Urgency":"الأهمية",
+"Low":"منخفضة","Medium":"متوسطة","High":"عالية","Critical":"حرجة",
+"Photos (up to 3 — tap a photo to remove it)":"الصور (حتى 3 — اضغط على الصورة لحذفها)",
+"📷 Take Photo":"📷 التقاط صورة","🖼 From Library":"🖼 من الألبوم",
+"+ Add Observation":"+ إضافة ملاحظة","✓ Update Observation":"✓ تحديث الملاحظة","Cancel Edit":"إلغاء التعديل",
+"Editing observation — make changes below, then tap \"Update Observation\"":"جارٍ تعديل الملاحظة — عدّل بالأسفل ثم اضغط \"تحديث الملاحظة\"",
+"✎ Edit":"✎ تعديل","Remove":"حذف",
+"Resources":"الموارد","Product":"المنتج","— Select —":"— اختر —","Qty":"الكمية","Unit":"الوحدة","+ Add Product":"+ إضافة منتج",
+"Which container was used?":"أي عبوة استُخدمت؟",
+"Technician":"الفني","— Select technician —":"— اختر الفني —","➕ Other — new technician…":"➕ آخر — فني جديد…",
+"New technician name":"اسم الفني الجديد","Full name (not in the list)":"الاسم الكامل (غير موجود بالقائمة)","+ Add Technician":"+ إضافة فني",
+"Other (amount & description)":"أخرى (مبلغ ووصف)",
+"Materials & Equipment Movement":"حركة المواد والمعدات","Direction":"الاتجاه","Taken":"مسحوب","Returned":"مرتجع",
+"Supplies":"مستلزمات","Equipment":"معدات","Item":"الصنف","+ Add Item":"+ إضافة صنف","Type":"النوع",
+"The Warehouse Manager's signature confirms these quantities.":"توقيع مدير المخزن يعتمد هذه الكميات.",
+"Review & Submit Section A":"مراجعة وإرسال القسم أ",
+"Pro Review — PRIVATE (do not hand to client yet)":"مراجعة المهندس — خاصة (لا تُسلَّم للعميل بعد)",
+"Visit Summary":"ملخص الزيارة","Observations & Recommendations":"الملاحظات والتوصيات","None recorded":"لا يوجد",
+"Resources Used":"الموارد المستخدمة","(internal — client will NOT see this)":"(داخلي — لن يراه العميل)",
+"Internal Notes":"ملاحظات داخلية","(HO only — never shown to client)":"(للإدارة فقط — لا تُعرض للعميل)",
+"✎ Edit Report (back to Section A)":"✎ تعديل التقرير (رجوع للقسم أ)",
+"👁 Preview Client PDF":"👁 معاينة تقرير العميل","👁 Preview W/H Manager PDF":"👁 معاينة تقرير المخزن",
+"Continue to Customer Sign-off →":"متابعة لتوقيع العميل ←","Continue to Warehouse Mgr Sign-off →":"متابعة لتوقيع مدير المخزن ←",
+"Site Visit Report — Customer Sign-off":"تقرير زيارة الموقع — توقيع العميل",
+"Site Visit Report — Warehouse Mgr Sign-off":"تقرير زيارة الموقع — توقيع مدير المخزن",
+"🔒 Customer has signed — the report is locked for editing.":"🔒 وقّع العميل — التقرير مقفل ولا يمكن تعديله.",
+"Customer Signature":"توقيع العميل","Warehouse Manager Signature":"توقيع مدير المخزن","Pro Signature":"توقيع المهندس",
+"Not signed yet":"لم يتم التوقيع بعد","← Back to Pro Review":"→ رجوع لمراجعة المهندس",
+"The report submits automatically once both signatures are captured.":"يُرسل التقرير تلقائيًا بعد اكتمال التوقيعين.",
+"Sign below with your finger (or mouse). Date, time & GPS are captured automatically.":"وقّع بإصبعك بالأسفل (أو بالفأرة). يُسجَّل التاريخ والوقت والموقع تلقائيًا.",
+"Save":"حفظ","Clear":"مسح","Signature":"التوقيع",
+"Other Work Activity":"نشاط عمل آخر","Activity":"النشاط","— Select activity —":"— اختر النشاط —",
+"HO Meeting":"اجتماع بالإدارة","Car Maintenance":"صيانة سيارة","Training":"تدريب",
+"Describe":"الوصف","Short description":"وصف مختصر","Comment (optional)":"تعليق (اختياري)",
+"✎ Sign":"✎ توقيع","Submit Activity":"تسجيل النشاط","← Back":"→ رجوع",
+"Client Rep":"ممثل العميل","Time":"الوقت","Odometer":"عداد الكيلومترات","Car":"السيارة","Pro":"المهندس",
+"Pests & Services":"الآفات والخدمات","Work Done":"الأعمال المنفذة","WO #":"رقم أمر العمل",
+"📤 Taken from warehouse":"📤 مسحوب من المخزن","📥 Returned to warehouse":"📥 مرتجع للمخزن",
+"liters":"لتر","tube":"أنبوبة","shaker":"عبوة رش","each":"قطعة","kg":"كجم","grams":"جم","km":"كم",
+"Main Warehouse":"المخزن الرئيسي","1L sprayer":"رشاش 1 لتر","5L tank":"خزان 5 لتر","10L tank":"خزان 10 لتر","Full":"كاملة","Full tank":"خزان كامل",
+"Time IN is required":"وقت الدخول مطلوب","Time OUT is required":"وقت الخروج مطلوب",
+"Odometer on arrival is required":"عداد الكيلومترات عند الوصول مطلوب","Odometer is required":"عداد الكيلومترات مطلوب",
+"Client Representative Name is required":"اسم ممثل العميل مطلوب",
+"At least one contact method (Email or Phone) is required":"مطلوب وسيلة تواصل واحدة على الأقل (بريد أو هاتف)",
+"Please search and select a customer from the list":"ابحث واختر العميل من القائمة",
+"Client name is required":"اسم العميل مطلوب","Address is required":"العنوان مطلوب",
+"Select the governorate":"اختر المحافظة","Select the zone":"اختر المنطقة",
+"Observation needs a title":"الملاحظة تحتاج عنوانًا","Observation added":"تمت إضافة الملاحظة","Observation updated ✓":"تم تحديث الملاحظة ✓",
+"Select product and quantity":"اختر المنتج والكمية","Select a technician":"اختر الفني",
+"Select an item and quantity":"اختر الصنف والكمية","Select the activity type":"اختر نوع النشاط",
+"Pro signature is required":"توقيع المهندس مطلوب","Activity recorded ✓":"تم تسجيل النشاط ✓","Report submitted ✓":"تم إرسال التقرير ✓",
+"Customer must sign first — the Pro signature closes the report.":"يجب أن يوقّع العميل أولًا — توقيع المهندس يُغلق التقرير.",
+"Warehouse Manager must sign first — the Pro signature closes the report.":"يجب أن يوقّع مدير المخزن أولًا — توقيع المهندس يُغلق التقرير.",
+"Both signatures are required before the PDF can be generated":"التوقيعان مطلوبان قبل إنشاء التقرير",
+"Please sign first":"يرجى التوقيع أولًا","Signature saved ✓":"تم حفظ التوقيع ✓",
+"Customer signed ✓ — report is now locked":"وقّع العميل ✓ — التقرير مقفل الآن",
+"Visit Details":"بيانات الزيارة","Work Performed":"الأعمال المنفذة","Attended By":"قام بالزيارة","Signatures":"التوقيعات",
+"Report ID":"رقم التقرير","Submitted":"تاريخ الإرسال",
+"****":"****","+20 100 123 4567":"+20 100 123 4567","Details...":"التفاصيل...",
+"For HO eyes only, e.g. client unhappy with pricing · access difficulties · watch this site…":"للإدارة فقط، مثل: العميل غير راضٍ عن الأسعار · صعوبة الدخول للموقع · موقع يحتاج متابعة…",
+"e.g. 1042":"مثال: 1042","e.g. 45,280":"مثال: 45,280","e.g. 50 EGP parking":"مثال: 50 جنيه انتظار سيارة",
+"e.g. Ahmed Hassan (person who will sign)":"مثال: أحمد حسن (الشخص الذي سيوقّع)",
+"e.g. Back kitchen":"مثال: المطبخ الخلفي",
+"e.g. Client requested earlier visits · Next visit to be scheduled for … · No one on site, visit cancelled · Gate code changed…":"مثال: العميل طلب زيارات أبكر · الزيارة القادمة ستُحدد في … · لا يوجد أحد بالموقع، أُلغيت الزيارة · تغيّر كود البوابة…",
+"e.g. Gap under kitchen door":"مثال: فتحة أسفل باب المطبخ",
+"e.g. Pro001":"مثال: Pro001","e.g. monthly ops meeting":"مثال: اجتماع العمليات الشهري",
+"name@company.com":"name@company.com"
+};
+function t(s){ return LANG==='ar' ? (AR[s]||s) : s; }
+function dispName(name){
+  if(LANG!=='ar'||!name) return name;
+  const hit=(typeof PRODUCTS!=='undefined'&&PRODUCTS.find(x=>x.name===name))
+    ||(typeof EQUIPMENT!=='undefined'&&EQUIPMENT.find(x=>x.name===name))
+    ||(typeof TECHNICIANS!=='undefined'&&TECHNICIANS.find(x=>x.name===name));
+  return (hit&&hit.nameAr)||name;
+}
+const tv=t;
+function buildTechSelect(){
+  const v=$('tSel')?$('tSel').value:'';
+  $('tSel').innerHTML='<option value="">'+t('— Select technician —')+'</option>'+TECHNICIANS.map(x=>`<option value="${x.code}">${x.code} — ${dispName(x.name)}</option>`).join('')+'<option value="OTHER">'+t('➕ Other — new technician…')+'</option>';
+  $('tSel').value=v;
+}
+function buildVocabSelects(){
+  const gv=$('fGovSel')?$('fGovSel').value:''; const zv=$('fZoneSel')?$('fZoneSel').value:'';
+  $('fGovSel').innerHTML='<option value="">'+t('— Select governorate —')+'</option>'+GOVERNORATES.map(g=>`<option value="${g}">${g}</option>`).join('');
+  $('fZoneSel').innerHTML='<option value="">'+t('— Select zone —')+'</option>'+ZONES.map(z=>`<option value="${z}">${z}</option>`).join('');
+  $('fGovSel').value=gv; $('fZoneSel').value=zv;
+}
+function toggleLang(){
+  LANG = LANG==='en' ? 'ar' : 'en';
+  localStorage.setItem('pt_lang', LANG);
+  document.getElementById('langBtn').textContent = LANG==='en' ? 'عربي' : 'EN';
+  applyLang();
+}
+function applyLang(){
+  const ar=LANG==='ar';
+  document.documentElement.dir = ar?'rtl':'ltr';
+  document.documentElement.lang = ar?'ar':'en';
+  document.getElementById('langBtn').textContent = ar ? 'EN' : 'عربي';
+  document.querySelectorAll('body *').forEach(el=>{
+    [...el.childNodes].forEach(n=>{
+      if(n.nodeType===3 && n.textContent.trim()){
+        if(n._orig===undefined) n._orig=n.textContent;
+        const base=n._orig, key=base.trim();
+        n.textContent = ar && AR[key] ? base.replace(key, AR[key]) : base;
+      }
+    });
+    if(el.placeholder!==undefined && el.placeholder){
+      if(!el.dataset.op) el.dataset.op=el.placeholder;
+      el.placeholder = ar ? (AR[el.dataset.op]||el.dataset.op) : el.dataset.op;
+    }
+  });
+  try{ buildVocabSelects(); }catch(e){}
+  try{ buildTechSelect(); }catch(e){}
+  try{ if(typeof fillWhItems==='function'&&document.getElementById('whItem').options.length>1) fillWhItems(); }catch(e){}
+  try{ if(draft){ renderCons(); renderTech(); renderWhMove(); } }catch(e){}
+  try{ renderPestChecks(); renderPestSubs(); }catch(e){}
+  try{ if(session) renderPlanCards(); }catch(e){}
+}
+
+/* ================= VERSION ================= */
+const APP_VERSION='v4.5.1';
+document.addEventListener('DOMContentLoaded',()=>{ const v=document.getElementById('appVer'); if(v) v.textContent='Prototype '+APP_VERSION; });
+
+/* ================= TEST DATA (fake) ================= */
+const PROS = [
+  {code:"Pro001", name:"Mahmoud Abdelrahman", type:"Pro", pass:"1234", defaultCar:"CAR-01"},
+  {code:"Pro002", name:"Sami Yaqoub", type:"Pro", pass:"5678", defaultCar:"CAR-02"},
+  {code:"Pro003", name:"Ahmed Rashad", type:"Pro", pass:"9012", defaultCar:"CAR-03"},
+  {code:"Pro004", name:"Mohamed Imam", type:"Pro", pass:"3456", defaultCar:"PUBLIC"},
+];
+const CARS = [
+  {id:"CAR-01", label:"Test Car 1 — Pickup A"},
+  {id:"CAR-02", label:"Test Car 2 — Van B"},
+  {id:"CAR-03", label:"Test Car 3 — Pickup C"},
+  {id:"CAR-04", label:"Test Car 4 — Spare D"},
+];
+const CUSTOMERS = [
+  {name:"Test Company A", no:"001-TEST-001", zone:"Zamalek/Downtown", addr:"123 Test Street, Cairo", gov:"Cairo", rep:"Test Rep Adel", email:"adel@testcompanya.com", phone:"+20 100 111 0001"},
+  {name:"Test Restaurant B", no:"002-TEST-002", zone:"Giza Pyramids", addr:"456 Demo Avenue, Giza", gov:"Giza", rep:"Chef Ahmed", email:"ahmed@testrestaurantb.com", phone:"+20 100 111 0002"},
+  {name:"Test Hotel C", no:"003-TEST-003", zone:"Heliopolis", addr:"789 Sample Road, Heliopolis", gov:"Cairo", rep:"Manager Mona", email:"mona@testhotelc.com", phone:"+20 100 111 0003"},
+  {name:"Test Office D", no:"004-TEST-004", zone:"Nasr City", addr:"321 Fake Boulevard, Nasr City", gov:"Cairo", rep:"Admin Karim", email:"karim@testofficed.com", phone:"+20 100 111 0004"},
+  {name:"Test Shop E", no:"005-TEST-005", zone:"Maadi", addr:"654 Mock Lane, Maadi", gov:"Cairo", rep:"Owner Salma", email:"", phone:"+20 100 111 0005"},
+  {name:"Demo Supermarket Zamalek", no:"006-TEST-006", zone:"Zamalek/Downtown", addr:"12 Demo Street, Zamalek", gov:"Cairo", rep:"Rep Demo Contact", email:"demo@test.com", phone:"+20 100 222 0000"},
+  {name:"Demo Supermarket Dokki", no:"007-TEST-007", zone:"Mohandessin/Dokki", addr:"88 Demo Street, Dokki", gov:"Giza", rep:"Rep Demo Contact", email:"demo@test.com", phone:"+20 100 222 0000"},
+  {name:"Sample Tower Nile View", no:"008-TEST-008", zone:"Zamalek/Downtown", addr:"5 Corniche, Cairo", gov:"Cairo", rep:"Rep Sample Contact", email:"sample@test.com", phone:"+20 100 222 0000"},
+  {name:"Sample Hotel Giza Pyramids", no:"009-TEST-009", zone:"Giza Pyramids", addr:"77 Pyramid Road, Giza", gov:"Giza", rep:"Rep Sample Contact", email:"sample@test.com", phone:"+20 100 222 0000"},
+  {name:"Mock Cafe Downtown", no:"010-TEST-010", zone:"Zamalek/Downtown", addr:"3 Talaat Harb, Downtown", gov:"Cairo", rep:"Rep Mock Contact", email:"mock@test.com", phone:"+20 100 222 0000"},
+  {name:"Mock Cafe New Cairo", no:"011-TEST-011", zone:"New Cairo", addr:"90th Street, New Cairo", gov:"Cairo", rep:"Rep Mock Contact", email:"mock@test.com", phone:"+20 100 222 0000"},
+  {name:"Trial Bakery Maadi", no:"012-TEST-012", zone:"Maadi", addr:"Road 9, Maadi", gov:"Cairo", rep:"Rep Trial Contact", email:"trial@test.com", phone:"+20 100 222 0000"},
+  {name:"Trial Pharmacy Heliopolis", no:"013-TEST-013", zone:"Heliopolis", addr:"Baghdad Street, Heliopolis", gov:"Cairo", rep:"Rep Trial Contact", email:"trial@test.com", phone:"+20 100 222 0000"},
+  {name:"Example School 6th October", no:"014-TEST-014", zone:"6th of October", addr:"Central Axis, 6th of October", gov:"Giza", rep:"Rep Example Contact", email:"example@test.com", phone:"+20 100 222 0000"},
+  {name:"Example Clinic Sheikh Zayed", no:"015-TEST-015", zone:"Sheikh Zayed", addr:"Zayed Plaza, Sheikh Zayed", gov:"Giza", rep:"Rep Example Contact", email:"example@test.com", phone:"+20 100 222 0000"},
+  {name:"Pilot Factory 10th Ramadan", no:"016-TEST-016", zone:"Obour/10th Ramadan Industrial", addr:"Industrial Zone A1, 10th of Ramadan", gov:"Sharqia", rep:"Rep Pilot Contact", email:"pilot@test.com", phone:"+20 100 222 0000"},
+  {name:"Pilot Warehouse Obour", no:"017-TEST-017", zone:"Obour/10th Ramadan Industrial", addr:"Block 12, Obour City", gov:"Qalyubia", rep:"Rep Pilot Contact", email:"pilot@test.com", phone:"+20 100 222 0000"},
+  {name:"Sandbox Mall Nasr City", no:"018-TEST-018", zone:"Nasr City", addr:"Abbas El Akkad, Nasr City", gov:"Cairo", rep:"Rep Sandbox Contact", email:"sandbox@test.com", phone:"+20 100 222 0000"},
+  {name:"Sandbox Gym Mohandessin", no:"019-TEST-019", zone:"Mohandessin/Dokki", addr:"Gameat El Dewal, Mohandessin", gov:"Giza", rep:"Rep Sandbox Contact", email:"sandbox@test.com", phone:"+20 100 222 0000"},
+  {name:"Trial Restaurant Gouna", no:"020-TEST-020", zone:"El Gouna/Red Sea", addr:"Marina District, El Gouna", gov:"Red Sea", rep:"Rep Trial Contact", email:"trial@test.com", phone:"+20 100 222 0000"},
+  /* --- Customer sync applied from CS Scheduler (INTEGRATION_SPEC §1 v1.2 ACTION) — O Restaurants group 021-TEST-021/01..03 --- */
+  {name:"O Restaurants — Zamalek", no:"021-TEST-021/01", zone:"Zamalek/Downtown", addr:"14 Brazil St, Zamalek", gov:"Cairo", rep:"Ops Manager Omar", email:"omar@orestaurants-test.com", phone:"+20 100 333 0001"},
+  {name:"O Restaurants — New Cairo", no:"021-TEST-021/02", zone:"New Cairo", addr:"90th St Food Court, New Cairo", gov:"Cairo", rep:"Branch Mgr Laila", email:"laila@orestaurants-test.com", phone:"+20 100 333 0002"},
+  {name:"O Restaurants — Maadi", no:"021-TEST-021/03", zone:"Maadi", addr:"Road 231, Degla, Maadi", gov:"Cairo", rep:"Ops Manager Omar", email:"omar@orestaurants-test.com", phone:"+20 100 333 0001"},
+];
+const WAREHOUSES = [
+  {name:"Main Warehouse", addr:"Industrial Zone, Cairo", gov:"Cairo", zone:"Cairo Industrial", manager:"Test Warehouse Manager", phone:"+20 100 000 0000"},
+  // future warehouses can be added here
+];
+const PRODUCTS = [
+  {name:"Test Spray A (bulk)", nameAr:"سبراي تجريبي أ (سائب)", unit:"liters", code:"TEST-001", form:"liquid",
+    packages:[{label:"1L sprayer",size:1},{label:"5L tank",size:5},{label:"10L tank",size:10}]},
+  {name:"Test Gel 30g tube", nameAr:"جل تجريبي — أنبوبة 30 جم", unit:"tube", code:"TEST-002a", form:"count", size:30, contentUnit:"g"},
+  {name:"Test Gel 60g tube", nameAr:"جل تجريبي — أنبوبة 60 جم", unit:"tube", code:"TEST-002b", form:"count", size:60, contentUnit:"g"},
+  {name:"Test Powder 500g shaker", nameAr:"بودرة تجريبية — عبوة 500 جم", unit:"shaker", code:"TEST-003", form:"count", size:500, contentUnit:"g"},
+  {name:"Test Paste C", nameAr:"معجون تجريبي ج", unit:"each", code:"TEST-004", form:"plain"},
+  {name:"Test Liquid D (bulk)", nameAr:"سائل تجريبي د (سائب)", unit:"liters", code:"TEST-005", form:"liquid",
+    packages:[{label:"1L sprayer",size:1},{label:"5L tank",size:5}]},
+  {name:"Test Granules E", nameAr:"حبيبات تجريبية هـ", unit:"kg", code:"TEST-006", form:"plain"},
+];
+const EQUIPMENT = [
+  {name:"Test Sprayer A", nameAr:"رشاش تجريبي أ", unit:"each", code:"EQ-001"},
+  {name:"Test Foamer B", nameAr:"فوّامة تجريبية ب", unit:"each", code:"EQ-002"},
+  {name:"Test UV Device C", nameAr:"جهاز أشعة تجريبي ج", unit:"each", code:"EQ-003"},
+  {name:"Test Bait Stations D", nameAr:"محطات طعوم تجريبية د", unit:"each", code:"EQ-004"},
+  {name:"Test Ladder E", nameAr:"سلم تجريبي هـ", unit:"each", code:"EQ-005"},
+];
+const TECHNICIANS = [
+  {code:"T-01", name:"Test Technician 1", nameAr:"فني تجريبي 1"},
+  {code:"T-02", name:"Test Technician 2", nameAr:"فني تجريبي 2"},
+  {code:"T-03", name:"Test Technician 3", nameAr:"فني تجريبي 3"},
+  {code:"T-04", name:"Test Technician 4", nameAr:"فني تجريبي 4"},
+  {code:"T-05", name:"Test Technician 5", nameAr:"فني تجريبي 5"},
+  {code:"T-06", name:"Test Technician 6", nameAr:"فني تجريبي 6"},
+];
+const PESTS = ["Rodents","Cockroaches","Ants","Flies","Mosquitoes","Bedbugs","Fleas","Ticks","Snakes/scorpions","Lizards","Birds","Weasels","Wild animals","Other"];
+const PEST_SERVICES = {
+  "Cockroaches": ["Space spray","Drain spray","Space baiting","IGR"],
+  "Rodents": ["Above ground","Drains/manholes"]
+};
+const ZONES = ["Zamalek/Downtown","Maadi","Heliopolis","Nasr City","New Cairo","6th of October","Sheikh Zayed","Mohandessin/Dokki","Giza Pyramids","Obour/10th Ramadan Industrial","Cairo Industrial","El Gouna/Red Sea","Other"];
+const GOVERNORATES = ["Cairo","Giza","Qalyubia","Alexandria","Sharqia","Dakahlia","Beheira","Monufia","Gharbia","Kafr El Sheikh","Damietta","Port Said","Ismailia","Suez","North Sinai","South Sinai","Red Sea","Matrouh","Fayoum","Beni Suef","Minya","Assiut","Sohag","Qena","Luxor","Aswan","New Valley"];
+
+/* ================= STATE ================= */
+let session = null;          // logged-in pro
+let draft = null;            // current report draft
+let obsPhotos = [];          // photos for observation being built
+let editObsIndex = null;     // index of observation being edited (null = adding new)
+let sigTarget = null;        // 'customer' | 'pro'
+let sigGeo = null;           // captured geo for signature
+let drawing=false, drew=false;
+
+const $ = id => document.getElementById(id);
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); $(id).classList.add('active'); window.scrollTo(0,0); }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',2400); }
+function store(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+function load(k,d){ try{ return JSON.parse(localStorage.getItem(k)) ?? d; }catch(e){ return d; } }
+function isLocked(){ return !!(draft && draft.customerSignature); }
+
+/* ================= PHASE 3B — 05:00 OPERATIONAL DAY + TEST HOOK (INTEGRATION_SPEC §1/§5/§7) ================= */
+/* Test hook (§7): ?now=YYYY-MM-DDTHH:MM in query or hash overrides 'now' — mirrors CSS. */
+function NOW(){
+  const m=(location.search+location.hash).match(/now=([\d\-]+T?[\d:]*)/);
+  if(m){ const d=new Date(m[1]); if(!isNaN(d)) return d; }
+  const tn=localStorage.getItem('pt_now');   // hidden test setting (§7) — used by 'Try the sample plan'
+  if(tn){ const d=new Date(tn); if(!isNaN(d)) return d; }
+  return new Date();
+}
+/* Operational day 05:00 → 05:00 (§1): before 05:00 you are still on the previous day's plan. */
+function opDayISO(){
+  const d=NOW(); const x=new Date(d.getTime()-5*3600*1000);
+  return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+}
+
+/* ================= LOGIN ================= */
+function doLogin(){
+  const c=$('loginCode').value.trim(), p=$('loginPass').value.trim();
+  const pro=PROS.find(x=>x.code.toLowerCase()===c.toLowerCase() && x.pass===p);
+  if(!pro){ $('loginErr').style.display='block'; return; }
+  $('loginErr').style.display='none';
+  session={code:pro.code,name:pro.name,type:pro.type};
+  store('pt_session',session);
+  store('pt_car', pro.defaultCar||'PUBLIC');   // fresh login resets to assigned car
+  renderHome(); show('scr-home');
+}
+function currentCarId(){ return load('pt_car', 'PUBLIC'); }
+function isPublicTransport(){ return currentCarId()==='PUBLIC'; }
+function carRecord(){
+  const id=currentCarId();
+  if(id==='PUBLIC') return {id:'PUBLIC', label:'Public transport / No car'};
+  const c=CARS.find(x=>x.id===id);
+  return c ? {id:c.id, label:c.label} : {id:id, label:id};
+}
+function changeCar(){
+  store('pt_car', $('homeCar').value);
+  toast("Car updated — applies to all visits from now");
+}
+/* ---------- on-device report database (holds FULL reports incl. photos & signatures) ---------- */
+let _db=null;
+function db(){ return new Promise((res,rej)=>{
+  if(_db) return res(_db);
+  const rq=indexedDB.open('pestrack',1);
+  rq.onupgradeneeded=e=>{ e.target.result.createObjectStore('reports',{keyPath:'id'}); };
+  rq.onsuccess=e=>{ _db=e.target.result; res(_db); };
+  rq.onerror=()=>rej(rq.error);
+});}
+function dbAddReport(r){ return db().then(d=>new Promise((res,rej)=>{
+  const tx=d.transaction('reports','readwrite');
+  tx.objectStore('reports').put(JSON.parse(JSON.stringify(r)));
+  tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+})).catch(()=>{}); }
+function dbGetReports(){ return db().then(d=>new Promise((res,rej)=>{
+  const rq=d.transaction('reports').objectStore('reports').getAll();
+  rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error);
+})).catch(()=>[]); }
+function dbDeleteReports(ids){ if(!ids.length) return Promise.resolve(); return db().then(d=>new Promise((res,rej)=>{
+  const tx=d.transaction('reports','readwrite'); const st=tx.objectStore('reports');
+  ids.forEach(id=>st.delete(id));
+  tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+})).catch(()=>{}); }
+function dbMarkExported(reports){ return db().then(d=>new Promise((res,rej)=>{
+  const now=new Date().toISOString();
+  const tx=d.transaction('reports','readwrite'); const st=tx.objectStore('reports');
+  reports.forEach(r=>{ r.exportedAt=now; st.put(r); });
+  tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+})).catch(()=>{}); }
+function purgeOldReports(){
+  // silent housekeeping: delete only reports that were exported at least once AND are older than 7 days
+  const cutoff=Date.now()-7*24*60*60*1000;
+  return dbGetReports().then(rs=>{
+    const old=rs.filter(r=>r.exportedAt && parseInt((r.id||'SVR-0').split('-')[1]||'0')<cutoff).map(r=>r.id);
+    return dbDeleteReports(old);
+  });
+}
+function dbClear(){ return db().then(d=>new Promise((res,rej)=>{
+  const tx=d.transaction('reports','readwrite');
+  tx.objectStore('reports').clear();
+  tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+})).catch(()=>{}); }
+
+function doLogout(){
+  if(!confirm("Logout will clear all local data on this device (today's visits are exported first). Continue?")) return;
+  exportAll(true).then(()=>dbClear()).then(()=>{
+    localStorage.removeItem('pt_session');
+    localStorage.removeItem('pt_car');
+    localStorage.removeItem('pt_techs_day');
+    localStorage.removeItem('pt_reports');
+    session=null;
+    $('loginCode').value=''; $('loginPass').value='';
+    show('scr-login');
+    toast("Logged out — device cleared");
+  });
+}
+
+/* ================= HOME ================= */
+function renderHome(){
+  $('homeName').textContent = session.name;
+  $('homeRole').textContent = session.code + " · " + session.type + " · Testing mode";
+  $('homeCar').value = currentCarId();
+  dbGetReports().then(reports=>{
+    renderPlanCards(reports);
+    showPendingPlanMsg();
+    reports.sort((a,b)=>(b.id||'').localeCompare(a.id||''));
+    $('homeCount').textContent = reports.length;
+    const box=$('homeReports');
+    if(!reports.length){ box.innerHTML='<div class="footer-note">No reports yet</div>'; return; }
+    box.innerHTML = reports.map(r=>`
+      <div class="report-row">
+        <div><div class="cust">${r.customer.name}</div><div class="when">${r.submittedAt} · ${r.pro.code}</div></div>
+        <button class="btn btn-blue btn-sm" onclick='pdfFromHistory("${r.id}")'>📄 PDF</button>
+      </div>`).join('');
+  });
+}
+function pdfFromHistory(id){
+  dbGetReports().then(rs=>{
+    const r=rs.find(x=>x.id===id);
+    if(!r){ toast("Report not found on this device"); return; }
+    openPdf(r);
+  });
+}
+function exportAll(silent){
+  return dbGetReports().then(reports=>{
+    if(!reports.length){ if(!silent) toast("No visits to export"); return; }
+    reports.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+    const blob=new Blob([JSON.stringify(reports,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`SOTAICO_End_of_Day_${opDayISO()}.json`; a.click();
+    dbMarkExported(reports);
+    if(!silent) toast("End of day file exported ✓ — send it to HO");
+  });
+}
+
+/* ================= SECTION A ================= */
+function startNewReport(){
+  draft={ id:'SVR-'+Date.now(), formType:'PesTrack Site Visit Report', appVersion:APP_VERSION, pro:session, customer:null, visit:{}, pests:[], work:'',
+          observations:[], consumables:[], technicians:[], other:'', whMovement:[],
+          scheduleRef:null, planBudget:null,
+          customerSignature:null, proSignature:null };
+  obsPhotos=[]; editObsIndex=null; selectedCustomer=null;
+  // reset form
+  $('fCustomer').value=''; $('fCustNo').value=''; $('fCustAddr').value=''; $('custList').classList.remove('open');
+  $('fClientRep').value=''; $('fClientEmail').value=''; $('fClientPhone').value='';
+  $('fWhSelect').value='0'; $('fGov').value=''; $('fGovSel').value=''; $('fZone').value=''; $('fZoneSel').value=''; $('woNum').value=''; $('woName').value=''; $('woAddr').value=''; $('pestSubs').innerHTML=''; $('fComments').value=''; $('fInternalNotes').value='';
+  $('whDir').value='Taken'; $('whType').value='Supplies'; $('whQty').value=''; $('whUnit').value=''; renderWhMove();
+  setWarehouseMode(false);
+  $('fTimeIn').value=''; $('fTimeOut').value=''; $('fOdo').value=''; $('fWork').value=''; $('fOther').value='';
+  if($('planGuide')){ $('planGuide').style.display='none'; $('planGuide').innerHTML=''; }
+  document.querySelectorAll('#fVisitType button').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('#fPests input').forEach(c=>c.checked=false);
+  resetObsForm();
+  $('cProd').value=''; $('cQty').value=''; $('cUnit').value=''; $('tSel').value=''; $('tOtherName').value=''; document.getElementById('tOtherWrap').style.display='none';
+  // pre-load today's technicians from the previous visit (auto-wipes at the 05:00 operational boundary — §5)
+  const savedTechs=load('pt_techs_day',null);
+  const _today=opDayISO();
+  if(savedTechs && savedTechs.date===_today && savedTechs.techs && savedTechs.techs.length){
+    draft.technicians=savedTechs.techs.slice();
+  }
+  renderObs(); renderCons(); renderTech();
+  // reset Other Work Activity mini-form
+  $('oaActivity').value=''; $('oaOther').value=''; document.getElementById('oaOtherWrap').style.display='none';
+  $('oaTimeIn').value=''; $('oaTimeOut').value=''; $('oaOdo').value=''; $('oaNote').value='';
+  visitKind='client';
+  updateWoMode();
+  show('scr-kind');
+}
+let selectedCustomer = null;
+function renderCustList(matches, q){
+  const list=$('custList');
+  if(!matches.length){
+    list.innerHTML='<div class="ac-empty">No matching customer found</div>';
+  } else {
+    list.innerHTML=matches.map(c=>{
+      let hl=c.name;
+      if(q){
+        const i=c.name.toLowerCase().indexOf(q);
+        if(i>=0) hl=c.name.slice(0,i)+'<b>'+c.name.slice(i,i+q.length)+'</b>'+c.name.slice(i+q.length);
+      }
+      return `<div class="ac-item" onclick="pickCustomer('${c.no}')">${hl}<div class="ac-sub">${c.no} · ${c.addr}</div></div>`;
+    }).join('');
+  }
+  list.classList.add('open');
+}
+function custSearch(){
+  const q=$('fCustomer').value.trim().toLowerCase();
+  // typing invalidates previous selection unless it still matches exactly
+  if(!selectedCustomer || selectedCustomer.name.toLowerCase()!==q){
+    selectedCustomer=null; $('fCustNo').value=''; $('fCustAddr').value=''; if(!isWarehouseVisit()){ $('fGov').value=''; $('fZone').value=''; }
+  }
+  if(q.length<1){ renderCustList(CUSTOMERS, ''); return; }   // empty = browse all
+  renderCustList(CUSTOMERS.filter(c=>c.name.toLowerCase().includes(q)).slice(0,8), q);
+}
+function custBrowseAll(e){
+  e.preventDefault(); e.stopPropagation();
+  const list=$('custList');
+  if(list.classList.contains('open')){ list.classList.remove('open'); return; }
+  renderCustList(CUSTOMERS, '');
+}
+function pickCustomer(no){
+  const c=CUSTOMERS.find(x=>x.no===no); if(!c) return;
+  selectedCustomer=c;
+  $('fCustomer').value=c.name;
+  $('fCustNo').value=c.no; $('fCustAddr').value=c.addr;
+  $('fGov').value=c.gov||''; $('fZone').value=c.zone||'';
+  // default contact details from customer record — Pro can overwrite
+  $('fClientRep').value=c.rep||'';
+  $('fClientEmail').value=c.email||'';
+  $('fClientPhone').value=c.phone||'';
+  $('custList').classList.remove('open');
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.ac-wrap')) $('custList').classList.remove('open');
+});
+function selVisit(btn){
+  const label=btn.dataset.v;
+  const btns=[...document.querySelectorAll('#fVisitType button')];
+  const auditBtn=btns.find(b=>b.dataset.v==='Site Audit');
+  // tapping a selected button deselects it
+  if(btn.classList.contains('sel')){ btn.classList.remove('sel'); return; }
+  if(label==='Site Audit'){
+    // Site Audit joins the selection; keep at most one other already-selected type
+    const others=btns.filter(b=>b.classList.contains('sel'));
+    others.slice(1).forEach(b=>b.classList.remove('sel'));
+    btn.classList.add('sel');
+  } else if(auditBtn && auditBtn.classList.contains('sel')){
+    // Site Audit is selected → this becomes the one allowed extra (replace any other extra)
+    btns.forEach(b=>{ if(b!==btn && b!==auditBtn) b.classList.remove('sel'); });
+    btn.classList.add('sel');
+  } else {
+    // normal single-select
+    btns.forEach(b=>b.classList.remove('sel'));
+    btn.classList.add('sel');
+  }
+}
+let visitKind='client';   // 'client' | 'wh' | 'other'
+function isWarehouseVisit(){ return visitKind==='wh'; }
+function fmtOdo(el){ const d=el.value.replace(/[^\d]/g,''); el.value = d ? parseInt(d).toLocaleString('en-US') : ''; }
+function odoRaw(id){ return ($(id).value||'').replace(/[^\d]/g,''); }
+function nowHM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function isWorkOrder(){ return [...document.querySelectorAll('#fVisitType button.sel')].some(b=>b.dataset.v==='Work Order'); }
+function updateWoMode(){
+  const wo = visitKind==='client' && isWorkOrder();
+  $('custSearchWrap').style.display = wo?'none':'block';
+  $('woFields').style.display = wo?'block':'none';
+  $('fGov').style.display = wo?'none':'block';
+  $('fGovSel').style.display = wo?'block':'none';
+  $('fZone').style.display = wo?'none':'block';
+  $('fZoneSel').style.display = wo?'block':'none';
+}
+function chooseKind(k){
+  visitKind=k;
+  if(k==='client'){ setWarehouseMode(false); $('vtBlock').style.display='block'; updateWoMode(); show('scr-a');
+    if(draft.technicians.length) toast("Technicians from your last visit pre-loaded — remove any who left"); }
+  else if(k==='wh'){ setWarehouseMode(true); $('vtBlock').style.display='none'; show('scr-a'); }
+  else { renderOaSig(); show('scr-other'); }
+}
+function renderOaSig(){
+  const p=draft&&draft.proSignature;
+  $('oaSigStatus').innerHTML = p ? `<span class="sig-done">✓ Signed</span><br>${p.date} at ${p.time}` : t('Not signed yet');
+  $('oaSigBtn').textContent = p ? '✓ Signed — tap to redo' : '✎ Sign';
+}
+function otherSubmit(){
+  const act=$('oaActivity').value;
+  if(!act){ toast(t("Select the activity type")); return; }
+  const actLabel = act==='Other' ? $('oaOther').value.trim() : act;
+  if(act==='Other' && !actLabel){ toast("Describe the activity"); $('oaOther').focus(); return; }
+  if(!$('oaTimeIn').value){ toast(t("Time IN is required")); $('oaTimeIn').focus(); return; }
+  if(!$('oaTimeOut').value){ toast(t("Time OUT is required")); $('oaTimeOut').focus(); return; }
+  if(!isPublicTransport() && !$('oaOdo').value){ toast(t("Odometer is required")); $('oaOdo').focus(); return; }
+  if(!draft.proSignature){ toast(t("Pro signature is required")); return; }
+  draft.kind='other';
+  draft.isWarehouse=false;
+  draft.activity={ type:act, label:actLabel };
+  draft.customer={ name:'Work Activity: '+actLabel, no:'ACTIVITY', addr:'' };
+  draft.clientRep={ name:session.name, email:'', phone:'' };
+  draft.visit={ timeIn:$('oaTimeIn').value, timeOut:$('oaTimeOut').value, odometerArrival:odoRaw('oaOdo'), governorate:'', car:carRecord(), type:'Work Activity — '+actLabel };
+  draft.comments=$('oaNote').value.trim();
+  draft.pests=[]; draft.services={}; draft.work=''; draft.observations=[]; draft.consumables=[]; draft.technicians=[];
+  draft.customerSignature=null;
+  draft.opDay=opDayISO();
+  draft.submittedAt=new Date().toLocaleString();
+  // silent JSON download (background record)
+  try{
+    const blob=new Blob([JSON.stringify(draft,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`PesTrack_Site_Visit_Report_${draft.customer.name.replace(/[^\w]+/g,'_')}_${draft.id}.json`; a.click();
+  }catch(e){}
+  dbAddReport(draft);
+  toast(t("Activity recorded ✓"));
+  renderHome(); show('scr-home');
+}
+function setWarehouseMode(on){
+  $('custFields').style.display = on?'none':'block';
+  $('whFields').style.display = on?'block':'none';
+  $('custCardTitle').textContent = on?'Warehouse Details':'Customer Details';
+  ['cardPests','cardWork','cardObs','cardRes'].forEach(id=>{ $(id).style.display = on?'none':'block'; });
+  $('custSigCardTitle').textContent = on?'Warehouse Manager Signature':'Customer Signature';
+  $('cardWhMove').style.display = on?'block':'none';
+  if(on){ fillWarehouse(); fillWhItems(); } else { $('fGov').value = selectedCustomer ? (selectedCustomer.gov||'') : ''; $('fZone').value = selectedCustomer ? (selectedCustomer.zone||'') : ''; }
+}
+function fillWarehouse(){
+  const idx=$('fWhSelect').value===''?0:+$('fWhSelect').value;
+  const w=WAREHOUSES[idx]||WAREHOUSES[0];
+  $('fWhSelect').value=String(WAREHOUSES.indexOf(w));
+  $('fWhManager').value=w.manager;
+  $('fWhPhone').value=w.phone;
+  $('fGov').value=w.gov; $('fZone').value=w.zone||'';
+}
+/* ---- pest service sub-options ---- */
+function renderPestChecks(){
+  const checked=[...document.querySelectorAll('#fPests input:checked')].map(c=>c.value);
+  $('fPests').innerHTML=PESTS.map(p=>`<label class="pest"><input type="checkbox" value="${p}" ${checked.includes(p)?'checked':''}> ${tv(p)}</label>`).join('');
+}
+function renderPestSubs(){
+  const checked=[...document.querySelectorAll('#fPests input:checked')].map(c=>c.value);
+  $('pestSubs').innerHTML = checked.filter(p=>PEST_SERVICES[p]).map(p=>`
+    <div style="margin-top:12px;border:1px solid var(--blue);border-radius:12px;padding:12px;background:#f6f9ff">
+      <div style="font-size:12.5px;font-weight:700;color:var(--blue);margin-bottom:8px">${tv(p)} — ${t('Service Type')} <span style="color:var(--critical)">*</span> ${t('(select all that apply)')}</div>
+      <div class="pests">
+        ${PEST_SERVICES[p].map(s=>`<label class="pest"><input type="checkbox" data-pest="${p}" value="${s}" ${draft&&draft._svc&&draft._svc[p]&&draft._svc[p].includes(s)?'checked':''}> ${tv(s)}</label>`).join('')}
+      </div>
+    </div>`).join('');
+}
+document.addEventListener('change', e=>{
+  if(e.target.closest('#fPests')){
+    // preserve already-ticked services before re-render
+    if(draft){ draft._svc=collectServices(); }
+    renderPestSubs();
+  }
+  if(e.target.closest('#pestSubs') && draft){ draft._svc=collectServices(); }
+});
+function collectServices(){
+  const svc={};
+  document.querySelectorAll('#pestSubs input:checked').forEach(c=>{
+    const p=c.getAttribute('data-pest');
+    (svc[p]=svc[p]||[]).push(c.value);
+  });
+  return svc;
+}
+let cMethod='manual', cDetail='', cEstimated=false, cPkgSel=null;
+function fillUnit(){
+  const p=PRODUCTS.find(x=>x.name===$('cProd').value);
+  $('cUnit').value=p?p.unit:'';
+  cMethod='manual'; cDetail=''; cEstimated=false; cPkgSel=null;
+  $('cQty').value='';
+  $('cPkgWrap').style.display='none'; $('cChips').style.display='none';
+  if(!p) return;
+  if(p.form==='liquid'){
+    $('cPkgBtns').innerHTML=p.packages.map((pk,i)=>`<button type="button" onclick="pickPkg(${i},this)">${tv(pk.label)}</button>`).join('');
+    $('cPkgWrap').style.display='block';
+  } else if(p.form==='count'){
+    renderCountChips(p);
+    $('cChips').style.display='block';
+  }
+}
+function pickPkg(i,btn){
+  const p=PRODUCTS.find(x=>x.name===$('cProd').value);
+  cPkgSel=p.packages[i];
+  document.querySelectorAll('#cPkgBtns button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  const fr=[[0.25,'¼'],[0.5,'½'],[0.75,'¾'],[1,'Full']];
+  $('cChipsLbl').textContent=LANG==='ar' ? 'كم استُخدم من '+tv(cPkgSel.label)+'؟ (يُحفظ كتقدير)' : 'How much of the '+cPkgSel.label+' was used? (saved as an estimate)';
+  $('cChipBtns').innerHTML=fr.map(f=>`<button type="button" onclick="pickLiquidFrac(${f[0]},'${f[1]}',this)">${f[1]}<br><span style="font-size:10.5px">${(f[0]*cPkgSel.size)} L</span></button>`).join('');
+  $('cChips').style.display='block';
+}
+function pickLiquidFrac(frac,label,btn){
+  document.querySelectorAll('#cChipBtns button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  $('cQty').value=frac*cPkgSel.size;
+  cMethod='container-fraction'; cEstimated=true;
+  cDetail=label+' of '+cPkgSel.label;
+}
+function renderCountChips(p){
+  $('cChipsLbl').textContent=LANG==='ar' ? 'كم عدد ('+tv(p.unit)+')؟ الأعداد الصحيحة دقيقة؛ "+جزء" يضيف تقديرًا لجزء من واحدة.' : 'How many '+p.unit+'s? Whole numbers are exact; "+part" adds an estimated fraction of one.';
+  const counts=[1,2,3,4,5].map(n=>`<button type="button" onclick="pickCount(${n},this)">${n}</button>`).join('');
+  const parts=[[0.25,'+¼'],[0.5,'+½'],[0.75,'+¾']].map(f=>`<button type="button" style="background:#fff7e8" onclick="pickPart(${f[0]},'${f[1]}',this)">${f[1]}</button>`).join('');
+  $('cChipBtns').innerHTML=counts+parts;
+}
+function pickCount(n,btn){
+  document.querySelectorAll('#cChipBtns button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  $('cQty').value=n; cMethod='count'; cEstimated=false; cDetail=n+' whole';
+}
+function pickPart(f,label,btn){
+  const cur=parseFloat($('cQty').value)||0;
+  const whole=Math.floor(cur);
+  $('cQty').value=whole+f;
+  cMethod='count+fraction'; cEstimated=true;
+  cDetail=(whole?whole+' whole ':'')+label.replace('+','+ ')+' of one';
+}
+/* ---------- observation photos ---------- */
+document.addEventListener('change', e=>{
+  if(e.target.id==='oPhotos'||e.target.id==='oPhotosCam'){
+    const room=3-obsPhotos.length;
+    if(room<=0){ toast("Maximum 3 photos per observation"); e.target.value=''; return; }
+    const files=[...e.target.files].slice(0,room);
+    files.forEach(f=>{
+      const rd=new FileReader();
+      rd.onload=ev=>{ shrinkImage(ev.target.result).then(small=>{ obsPhotos.push(small); renderObsThumbs(); }); };
+      rd.readAsDataURL(f);
+    });
+    e.target.value='';
+  }
+});
+function shrinkImage(dataUrl){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1280; let w=img.width,h=img.height;
+      if(Math.max(w,h)>MAX){ const s=MAX/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      res(c.toDataURL('image/jpeg',0.72));
+    };
+    img.onerror=()=>res(dataUrl);
+    img.src=dataUrl;
+  });
+}
+function renderObsThumbs(){
+  $('oThumbs').innerHTML=obsPhotos.map((p,i)=>`<img src="${p}" onclick="obsPhotos.splice(${i},1);renderObsThumbs()" title="Tap to remove">`).join('');
+}
+function resetObsForm(){
+  ['oTitle','oLoc','oDesc'].forEach(i=>$(i).value=''); $('oUrg').value='Low';
+  $('oPhotos').value=''; obsPhotos=[]; renderObsThumbs();
+  editObsIndex=null;
+  $('obsAddBtn').textContent='+ Add Observation';
+  $('obsCancelBtn').style.display='none';
+  $('editNote').classList.remove('show');
+  $('obsNumLabel').textContent = '#'+(((draft&&draft.observations)?draft.observations.length:0)+1);
+}
+function addObs(){
+  const ttl=$('oTitle').value.trim();
+  if(!ttl){ toast(t("Observation needs a title")); return; }
+  const obs={ title:ttl, location:$('oLoc').value.trim(), description:$('oDesc').value.trim(),
+    urgency:$('oUrg').value, photos:obsPhotos.slice() };
+  if(editObsIndex!==null){
+    draft.observations[editObsIndex]=obs;
+    toast(t("Observation updated ✓"));
+  } else {
+    draft.observations.push(obs);
+    toast(t("Observation added"));
+  }
+  resetObsForm();
+  renderObs();
+  setTimeout(()=>{ $('obsNumLabel').scrollIntoView({behavior:'smooth', block:'center'}); }, 60);
+}
+function editObs(i){
+  const o=draft.observations[i];
+  editObsIndex=i;
+  $('oTitle').value=o.title; $('oLoc').value=o.location; $('oDesc').value=o.description; $('oUrg').value=o.urgency;
+  obsPhotos=o.photos.slice(); renderObsThumbs();
+  $('obsAddBtn').textContent='✓ Update Observation';
+  $('obsCancelBtn').style.display='block';
+  $('editNote').classList.add('show');
+  $('obsNumLabel').textContent='#'+(i+1);
+  renderObs();
+  $('editNote').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function cancelEditObs(){ resetObsForm(); renderObs(); }
+function renderObs(){
+  $('obsList').innerHTML = draft.observations.map((o,i)=>`
+    <div class="obs-item ${editObsIndex===i?'editing':''}">
+      <div class="obs-head"><b><span style="font-size:17px;font-weight:800;color:var(--green)">#${i+1}</span> ${o.title}</b><span class="badge b-${o.urgency}">${o.urgency}</span></div>
+      <div style="font-size:12.5px;color:var(--muted)">${o.location||''}</div>
+      <div style="font-size:13px;margin-top:4px" dir="auto">${o.description||''}</div>
+      <div class="thumbs">${o.photos.map(p=>`<img src="${p}">`).join('')}</div>
+      <div class="obs-actions">
+        <button class="edit" onclick="editObs(${i})">✎ Edit</button>
+        <button class="del" onclick="draft.observations.splice(${i},1);if(editObsIndex===${i})resetObsForm();renderObs()">Remove</button>
+      </div>
+    </div>`).join('');
+}
+function addCons(){
+  const p=$('cProd').value, q=parseFloat($('cQty').value);
+  if(!p||!q){ toast(t("Select product and quantity")); return; }
+  const prod=PRODUCTS.find(x=>x.name===p);
+  draft.consumables.push({product:p, qty:q, unit:$('cUnit').value,
+    estimated:cEstimated, method:cMethod, detail:cDetail||undefined,
+    contentAmount:(prod&&prod.size)?Math.round(q*prod.size*10)/10:undefined,
+    contentUnit:(prod&&prod.contentUnit)||undefined});
+  $('cProd').value=''; $('cQty').value=''; $('cUnit').value='';
+  $('cChips').style.display='none'; $('cPkgWrap').style.display='none';
+  cMethod='manual'; cDetail=''; cEstimated=false; cPkgSel=null;
+  renderCons();
+}
+function consLine(c){
+  return `${c.estimated?'~':''}${c.qty} ${tv(c.unit)}${c.contentAmount?` <span style="color:var(--muted);font-size:12px">≈${c.contentAmount} ${c.contentUnit}</span>`:''}${c.detail?` <span style="color:var(--muted);font-size:12px">(${c.detail})</span>`:''}${c.estimated?' <span style="color:var(--muted);font-size:11px">est.</span>':''}`;
+}
+function renderCons(){
+  $('consList').innerHTML = draft.consumables.map((c,i)=>`
+    <div class="line-item"><span>${dispName(c.product)} — <b>${consLine(c)}</b></span>
+    <button class="del" onclick="draft.consumables.splice(${i},1);renderCons()">✕</button></div>`).join('');
+}
+function fillWhItems(){
+  const src = $('whType').value==='Equipment' ? EQUIPMENT : PRODUCTS;
+  $('whItem').innerHTML='<option value="">'+t('— Select —')+'</option>'+src.map(x=>`<option value="${x.name}">${dispName(x.name)}</option>`).join('');
+  $('whUnit').value=''; 
+}
+function fillWhUnit(){
+  const src = $('whType').value==='Equipment' ? EQUIPMENT : PRODUCTS;
+  const it=src.find(x=>x.name===$('whItem').value);
+  $('whUnit').value=it?it.unit:'';
+}
+function addWhMove(){
+  const name=$('whItem').value, qty=parseFloat($('whQty').value);
+  if(!name||!qty){ toast(t("Select an item and quantity")); return; }
+  draft.whMovement.push({ dir:$('whDir').value, type:$('whType').value, name:name, qty:qty, unit:$('whUnit').value });
+  $('whItem').value=''; $('whQty').value=''; $('whUnit').value='';
+  renderWhMove();
+}
+function renderWhMove(){
+  const box=$('whMoveList');
+  if(!draft||!draft.whMovement||!draft.whMovement.length){ box.innerHTML=''; return; }
+  const row=(m,i)=>`<div class="line-item"><span>${m.type==='Equipment'?'🔧':'🧪'} ${dispName(m.name)} — <b>${m.qty} ${tv(m.unit)}</b></span><button class="del" onclick="draft.whMovement.splice(${i},1);renderWhMove()">✕</button></div>`;
+  let h='';
+  const tk=draft.whMovement.map((m,i)=>({m,i})).filter(x=>x.m.dir==='Taken');
+  const rt=draft.whMovement.map((m,i)=>({m,i})).filter(x=>x.m.dir==='Returned');
+  if(tk.length) h+='<div style="font-weight:700;color:var(--blue);font-size:12.5px;margin-top:6px">📤 TAKEN</div>'+tk.map(x=>row(x.m,x.i)).join('');
+  if(rt.length) h+='<div style="font-weight:700;color:var(--green);font-size:12.5px;margin-top:6px">📥 RETURNED</div>'+rt.map(x=>row(x.m,x.i)).join('');
+  box.innerHTML=h;
+}
+function addTech(){
+  const code=$('tSel').value;
+  if(!code){ toast(t("Select a technician")); return; }
+  if(code==='OTHER'){
+    const name=$('tOtherName').value.trim();
+    if(!name){ toast("Type the new technician's name"); $('tOtherName').focus(); return; }
+    if(draft.technicians.some(t=>t.isTemp && t.name.toLowerCase()===name.toLowerCase())){ toast("This name is already added"); return; }
+    draft.technicians.push({code:'TEMP', name:name, isTemp:true});
+    $('tOtherName').value='';   // ready for another new name
+  } else {
+    if(draft.technicians.some(t=>t.code===code)){ toast("Technician already added"); return; }
+    const t=TECHNICIANS.find(x=>x.code===code);
+    draft.technicians.push({code:t.code,name:t.name});
+    $('tSel').value=''; document.getElementById('tOtherWrap').style.display='none';
+  }
+  renderTech();
+}
+function renderTech(){
+  $('techList').innerHTML = draft.technicians.map((t,i)=>`
+    <div class="line-item"><span>${t.isTemp?'🆕':t.code} — ${dispName(t.name)}</span>
+    <button class="del" onclick="draft.technicians.splice(${i},1);renderTech()">✕</button></div>`).join('');
+}
+
+/* ================= SECTION B ================= */
+function pestsWithServices(r){
+  return (r.pests||[]).map(p=>{
+    const s=r.services&&r.services[p];
+    return (s&&s.length) ? tv(p)+' ['+s.map(tv).join('; ')+']' : tv(p);
+  }).join('; ');
+}
+function gotoB(){
+  const wh=isWarehouseVisit();
+  const woMode = !wh && isWorkOrder();
+  if(woMode){ $('fGov').value=$('fGovSel').value; $('fZone').value=$('fZoneSel').value; }
+  if(!$('fGov').value){ toast(wh?"Select a warehouse":(woMode?"Select the governorate":"Governorate missing — select the customer from the list")); return; }
+  if(!$('fZone').value){ toast(wh?"Warehouse zone missing":(woMode?"Select the zone":"Zone missing — select the customer from the list")); return; }
+  if(!$('fTimeIn').value){ toast(t("Time IN is required")); $('fTimeIn').focus(); return; }
+  if(!$('fTimeOut').value){ $('fTimeOut').value=nowHM(); toast("Time OUT defaulted to now — adjust if needed"); }
+  if(!isPublicTransport() && !$('fOdo').value){ toast(t("Odometer on arrival is required")); $('fOdo').focus(); return; }
+  if(wh){
+    // ---- Warehouse visit (details auto-filled from warehouse table) ----
+    const w=WAREHOUSES[+($('fWhSelect').value||0)]||WAREHOUSES[0];
+    draft.customer={ name:w.name, no:'WAREHOUSE', addr:w.addr };
+    draft.clientRep={ name:w.manager, email:'', phone:w.phone };
+    draft.isWarehouse=true;
+    draft.services={};
+    draft.pests=[];
+    draft.work='';
+  } else {
+    // ---- Customer visit ----
+    let cust=selectedCustomer;
+    if(woMode){
+      const nm=$('woName').value.trim(), ad=$('woAddr').value.trim(), won=$('woNum').value.trim();
+      if(!nm){ toast(t("Client name is required")); $('woName').focus(); return; }
+      if(!ad){ toast(t("Address is required")); $('woAddr').focus(); return; }
+      cust={ name:nm, no: won?('WO-'+won):'WO', addr:ad };
+      draft.workOrderNo=won||'';
+    }
+    else if(!cust){ toast(t("Please search and select a customer from the list")); return; }
+    const rep=$('fClientRep').value.trim();
+    if(!rep){ toast(t("Client Representative Name is required")); $('fClientRep').focus(); return; }
+    const email=$('fClientEmail').value.trim();
+    const phone=$('fClientPhone').value.trim();
+    if(!email && !phone){ toast(t("At least one contact method (Email or Phone) is required")); $('fClientEmail').focus(); return; }
+    // pest services required when the pest has service types
+    const checkedPests=[...document.querySelectorAll('#fPests input:checked')].map(c=>c.value);
+    const svc=collectServices();
+    for(const p of checkedPests){
+      if(PEST_SERVICES[p] && (!svc[p] || !svc[p].length)){
+        toast(p+": select at least one service type"); return;
+      }
+    }
+    // auto-capture an observation still being typed so nothing is lost
+    if($('oTitle').value.trim()){
+      addObs();
+    } else if(obsPhotos.length){
+      toast("You have photos in an unsaved observation — add a Title, then tap Add Observation");
+      $('oTitle').focus();
+      return;
+    }
+    draft.customer=cust;
+    draft.clientRep={ name:rep, email:email, phone:phone };
+    draft.isWarehouse=false;
+    draft.pests=checkedPests;
+    draft.services=svc;
+    draft.work=$('fWork').value.trim();
+  }
+  const vts=[...document.querySelectorAll('#fVisitType button.sel')].map(b=>b.dataset.v);
+  draft.kind=visitKind;
+  draft.comments=$('fComments').value.trim();
+  draft.visit={ timeIn:$('fTimeIn').value, timeOut:$('fTimeOut').value, odometerArrival:odoRaw('fOdo'),
+    governorate:$('fGov').value, zone:$('fZone').value, car:carRecord(), type: wh ? 'SOTAICO W/H' : vts.join(' + ') };
+  draft.other=$('fOther').value.trim();
+  const signerLabel = draft.isWarehouse ? t('Warehouse Manager') : t('Client Rep');
+  const fmtMove=list=>list.map(m=>`<div>• ${m.qty} ${tv(m.unit)} — ${m.type==='Equipment'?'🔧':'🧪'} ${dispName(m.name)}</div>`).join('');
+  const whTk=fmtMove((draft.whMovement||[]).filter(m=>m.dir==='Taken'));
+  const whRt=fmtMove((draft.whMovement||[]).filter(m=>m.dir==='Returned'));
+  // client-facing summary (also what the Pro reviews) — NO internal data
+  const clientSummary = `
+    <div class="sum-row"><span>${draft.isWarehouse?t('Warehouse'):(LANG==='ar'?'العميل':'Customer')}</span><span>${draft.customer.name}</span></div>
+    <div class="sum-row"><span>${t('Customer #')}</span><span>${draft.customer.no}</span></div>
+    <div class="sum-row"><span>${t('Address')}</span><span>${draft.customer.addr}</span></div>
+    <div class="sum-row"><span>${t('Governorate')}</span><span>${draft.visit.governorate}</span></div>
+    <div class="sum-row"><span>${t('Zone')}</span><span>${draft.visit.zone||'—'}</span></div>
+    <div class="sum-row"><span>${signerLabel}</span><span>${draft.clientRep.name}</span></div>
+    <div class="sum-row"><span>${t('Visit Type')}</span><span>${draft.visit.type?draft.visit.type.split(' + ').map(tv).join(' + '):'—'}</span></div>
+    ${draft.workOrderNo?`<div class="sum-row"><span>${t('WO #')}</span><span>${draft.workOrderNo}</span></div>`:''}
+    <div class="sum-row"><span>${t('Time')}</span><span>${draft.visit.timeIn||'—'} → ${draft.visit.timeOut||'—'}</span></div>
+    <div class="sum-row"><span>${t('Odometer')}</span><span>${draft.visit.odometerArrival?Number(draft.visit.odometerArrival).toLocaleString('en-US')+' '+t('km'):'—'}</span></div>
+    <div class="sum-row"><span>${t('Car')}</span><span>${draft.visit.car?draft.visit.car.label:'—'}</span></div>
+    ${draft.isWarehouse&&whTk?`<div class="sum-block"><div class="lbl">${t('📤 Taken from warehouse')}</div><div class="val" dir="auto">${whTk}</div></div>`:''}
+    ${draft.isWarehouse&&whRt?`<div class="sum-block"><div class="lbl">${t('📥 Returned to warehouse')}</div><div class="val" dir="auto">${whRt}</div></div>`:''}
+    ${draft.isWarehouse?'':`<div class="sum-row"><span>${t('Pests & Services')}</span><span>${pestsWithServices(draft)||'—'}</span></div>`}
+    ${draft.isWarehouse?'':`<div class="sum-block"><div class="lbl">${t('Work Done')}</div><div class="val" dir="auto">${draft.work||'—'}</div></div>`}
+    ${draft.comments?`<div class="sum-block"><div class="lbl">${t('Visit Comments')}</div><div class="val" dir="auto">${draft.comments}</div></div>`:''}
+    <div class="sum-row"><span>${t('Pro')}</span><span>${session.name} (${session.code})</span></div>`;
+  $('sumBox').innerHTML = clientSummary;
+  $('sumBoxC').innerHTML = clientSummary;
+  const obsSummary = draft.observations.length ? draft.observations.map((o,i)=>`
+    <div class="obs-item">
+      <div class="obs-head"><b><span style="font-size:16px;font-weight:800;color:var(--green)">#${i+1}</span> ${o.title}</b><span class="badge b-${o.urgency}">${o.urgency}</span></div>
+      <div style="font-size:12.5px;color:var(--muted)">${o.location||''}</div>
+      <div style="font-size:13px;margin-top:4px" dir="auto">${o.description||''}</div>
+      <div class="thumbs">${o.photos.map(p=>`<img src="${p}">`).join('')}</div>
+    </div>`).join('') : '<div class="footer-note">None recorded</div>';
+  $('sumObs').innerHTML = obsSummary;
+  $('sumObsC').innerHTML = obsSummary;
+  // internal resources (Pro Review page only)
+  const resRows=[];
+  (draft.consumables||[]).forEach(c=>resRows.push(`<div class="line-item"><span>🧪 ${dispName(c.product)} — <b>${consLine(c)}</b></span></div>`));
+  (draft.technicians||[]).forEach(x=>resRows.push(`<div class="line-item"><span>👷 ${x.isTemp?'🆕':x.code} — ${dispName(x.name)}</span></div>`));
+  if(draft.other) resRows.push(`<div class="line-item"><span>💰 Other: ${draft.other}</span></div>`);
+  $('sumRes').innerHTML = resRows.length ? resRows.join('') : '<div class="footer-note">None recorded</div>';
+  $('sumResCard').style.display = draft.isWarehouse ? 'none' : 'block';
+  $('intNotesCard').style.display = draft.isWarehouse ? 'none' : 'block';
+  $('toSignoffBtn').textContent = draft.isWarehouse ? t('Continue to Warehouse Mgr Sign-off →') : t('Continue to Customer Sign-off →');
+  $('previewBtn').textContent = draft.isWarehouse ? t('👁 Preview W/H Manager PDF') : t('👁 Preview Client PDF');
+  $('signoffSub').textContent = draft.isWarehouse ? t('Site Visit Report — Warehouse Mgr Sign-off') : t('Site Visit Report — Customer Sign-off');
+  updateSigStatus();
+  show('scr-b');
+}
+function goToSignoff(){
+  updateSigStatus();
+  show('scr-c');
+}
+function backToA(){
+  if(isLocked()){
+    toast("🔒 Locked — customer has already signed. No edits allowed.");
+    return;
+  }
+  show('scr-a');
+}
+function updateSigStatus(){
+  const c=draft.customerSignature, p=draft.proSignature;
+  const who=draft.isWarehouse?t('Warehouse Manager'):(LANG==='ar'?'العميل':'Customer');
+  $('custSigCardTitle').textContent=draft.isWarehouse?t('Warehouse Manager Signature'):t('Customer Signature');
+  $('custSigStatus').innerHTML = c ? `<span class="sig-done">✓ Signed</span><br>${c.date} at ${c.time}<br>📍 ${c.gpsText}` : t('Not signed yet');
+  $('custSigBtn').textContent = c ? '✓ '+who : '✎ '+(draft.isWarehouse?t('Warehouse Manager Signature'):t('Customer Signature'));
+  $('proSigStatus').innerHTML = p ? `<span class="sig-done">✓ Signed</span><br>${p.date} at ${p.time}` : t('Not signed yet');
+  $('proSigBtn').textContent = p ? '✓ ✎' : '✎ '+t('Pro Signature');
+  $('lockBanner').classList.toggle('show', isLocked());
+  $('backToABtn').style.display = isLocked() ? 'none' : 'block';
+}
+
+/* ---------- signature canvas ---------- */
+const canvas=$('sigCanvas'); let ctx=null;
+function openSig(target){
+  if(target==='customer' && draft.customerSignature){
+    toast("Customer has already signed — report is locked.");
+    return;
+  }
+  if(target==='pro' && visitKind!=='other' && !draft.customerSignature){
+    toast(isWarehouseVisit()?t("Warehouse Manager must sign first — the Pro signature closes the report."):t("Customer must sign first — the Pro signature closes the report."));
+    return;
+  }
+  sigTarget=target; drew=false; sigGeo=null;
+  $('sigTitle').textContent = target==='customer' ? (draft.isWarehouse?t('Warehouse Manager Signature'):t('Customer Signature')) : t('Pro Signature');
+  $('sigModal').classList.add('open');
+  setTimeout(()=>{ // size canvas after visible
+    canvas.width=canvas.offsetWidth*2; canvas.height=canvas.offsetHeight*2;
+    ctx=canvas.getContext('2d'); ctx.scale(2,2);
+    ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.strokeStyle='#1a2733';
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  },50);
+  // GPS
+  $('sigGps').textContent='📍 Getting location…';
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ sigGeo={lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy)};
+             $('sigGps').textContent=`📍 ${sigGeo.lat}, ${sigGeo.lng} (±${sigGeo.acc} m)`; },
+      err=>{ $('sigGps').textContent='📍 No GPS signal — signature will save without location'; },
+      {timeout:6000, enableHighAccuracy:true});
+  } else $('sigGps').textContent='📍 GPS not supported on this device';
+}
+function pos(e){
+  const r=canvas.getBoundingClientRect();
+  const t=e.touches?e.touches[0]:e;
+  return {x:t.clientX-r.left, y:t.clientY-r.top};
+}
+function startDraw(e){ e.preventDefault(); drawing=true; drew=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); }
+function moveDraw(e){ if(!drawing) return; e.preventDefault(); const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }
+function endDraw(){ drawing=false; }
+canvas.addEventListener('mousedown',startDraw); canvas.addEventListener('mousemove',moveDraw); window.addEventListener('mouseup',endDraw);
+canvas.addEventListener('touchstart',startDraw,{passive:false}); canvas.addEventListener('touchmove',moveDraw,{passive:false}); canvas.addEventListener('touchend',endDraw);
+function clearSig(){ ctx.clearRect(0,0,canvas.width,canvas.height); drew=false; }
+function closeSig(){ $('sigModal').classList.remove('open'); }
+function saveSig(){
+  if(!drew){ toast(t("Please sign first")); return; }
+  const now=new Date();
+  const sig={ image:canvas.toDataURL('image/png'),
+    timestamp: now.toISOString(),
+    date: now.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),
+    time: now.toLocaleTimeString(),
+    gps: sigGeo, gpsText: sigGeo?`${sigGeo.lat}, ${sigGeo.lng} (±${sigGeo.acc} m)`:'No GPS signal',
+    gpsStatus: sigGeo?'captured':'no_signal' };
+  if(sigTarget==='customer'){
+    draft.customerSignature=sig;
+    toast(t("Customer signed ✓ — report is now locked"));
+  } else {
+    draft.proSignature=sig;
+    toast(t("Signature saved ✓"));
+  }
+  closeSig();
+  if(visitKind==='other'){ renderOaSig(); }
+  else {
+    updateSigStatus();
+    if(draft.customerSignature && draft.proSignature && !draft.submittedAt){ finalSubmit(); }
+  }
+}
+
+function previewPdf(){
+  openPdf(draft, true);   // view-only: no share, no print, PREVIEW watermark
+}
+/* ---------- final submit ---------- */
+function finalSubmit(){
+  if(!draft.proSignature && !draft.customerSignature){ toast("Both Pro and Customer signatures are required"); return; }
+  if(!draft.proSignature){ toast("Pro signature is missing — tap 'Capture Pro Signature'"); return; }
+  if(!draft.customerSignature){ toast("Customer signature is missing — tap 'Capture Customer Signature'"); return; }
+  draft.internalNotes=$('fInternalNotes').value.trim();
+  draft.opDay=opDayISO();
+  draft.submittedAt=new Date().toLocaleString();
+  // 1) Open the customer PDF immediately (print window → Save as PDF / share)
+  openPdf(draft);
+  // 2) Download the FULL report (with photos & signatures) as JSON backup
+  try{
+    const blob=new Blob([JSON.stringify(draft,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`PesTrack_Site_Visit_Report_${draft.customer.name.replace(/\s+/g,'_')}_${draft.id}.json`; a.click();
+  }catch(e){ toast("JSON export failed: "+e.message); }
+  // 3) Store the FULL report (photos & signatures) in the on-device database
+  dbAddReport(draft);
+  // remember today's technician crew for the next visit (client visits only) — keyed to the 05:00 operational day (§5)
+  if(!draft.isWarehouse){ try{ store('pt_techs_day',{date:opDayISO(), techs:draft.technicians||[]}); }catch(e){} }
+  toast(t("Report submitted ✓"));
+  renderHome(); show('scr-home');
+}
+
+/* ---------- customer PDF (print view) ---------- */
+function getLogoDataURI(){
+  try{
+    const bg=getComputedStyle(document.querySelector('.logo-img')).backgroundImage;
+    const m=bg.match(/url\("?(data:image\/[^")]+)"?\)/);
+    return m?m[1]:'';
+  }catch(e){ return ''; }
+}
+function openPdf(r, previewOnly){
+  const logo=getLogoDataURI();
+  const badgeColor={Critical:'#d63031',High:'#e17055',Medium:'#b8860b',Low:'#00b894'};
+  const obsHTML = (r.observations&&r.observations.length) ? r.observations.map((o,i)=>`
+    <div class="obs">
+      <div class="obs-h"><b>#${i+1} — ${o.title}</b><span class="badge" style="background:${badgeColor[o.urgency]||'#888'}">${o.urgency}</span></div>
+      ${o.location?`<div class="muted">📍 ${o.location}</div>`:''}
+      ${o.description?`<div class="obs-d" dir="auto">${o.description}</div>`:''}
+      ${(o.photos&&o.photos.length)?`<div class="ph">${o.photos.map(p=>`<img src="${p}">`).join('')}</div>`:''}
+    </div>`).join('') : '<div class="muted">'+(LANG==='ar'?'لا توجد ملاحظات لهذه الزيارة.':'No observations recorded during this visit.')+'</div>';
+  const sigBlock=(s,label,showGps)=> s && s.image && s.image.startsWith('data:') ? `
+    <div class="sig">
+      <img src="${s.image}">
+      <div class="sig-meta"><b>${label}</b><br>${s.date} at ${s.time}${showGps?`<br>📍 ${s.gpsText}`:''}</div>
+    </div>` : `<div class="sig"><div class="sig-meta muted">${label}: not available</div></div>`;
+  const RTL = LANG==='ar';
+  const html=`<!DOCTYPE html><html dir="${RTL?'rtl':'ltr'}" lang="${RTL?'ar':'en'}"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">${RTL?'<style>body,td,th,div{font-family:\'Cairo\',sans-serif !important}</style>':''}<title>${r.id} — PesTrack Site Visit Report</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;color:#22303e;letter-spacing:normal;word-spacing:normal}
+    body{padding:28px;max-width:760px;margin:0 auto;font-size:13px}
+    .head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #8bc63f;padding-bottom:12px;margin-bottom:16px}
+    .head img{height:46px}
+    .head .rid{text-align:right;font-size:11px;color:#6b7a89}
+    h1{font-size:17px;color:#3d5fa8;margin-bottom:2px}
+    h2{font-size:12px;color:#3d5fa8;text-transform:uppercase;letter-spacing:.6px;border-bottom:1.5px solid #8bc63f;padding-bottom:4px;margin:18px 0 8px}
+    table{width:100%;border-collapse:collapse}
+    td{padding:5px 8px;border-bottom:1px dashed #dde3ea;vertical-align:top}
+    td:first-child{color:#6b7a89;width:32%}
+    td:last-child{font-weight:600}
+    .muted{color:#6b7a89}
+    .obs{border:1px solid #dde3ea;border-radius:8px;padding:10px;margin-bottom:8px;page-break-inside:avoid}
+    .obs-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+    .badge{color:#fff;font-size:10px;font-weight:700;padding:2px 9px;border-radius:12px}
+    .obs-d{margin-top:3px}
+    .ph{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+    .ph img{width:110px;height:110px;object-fit:cover;border-radius:6px;border:1px solid #dde3ea}
+    .sigs{display:flex;gap:14px;margin-top:8px}
+    .sig{flex:1;border:1px solid #dde3ea;border-radius:8px;padding:10px;text-align:center;page-break-inside:avoid}
+    .sig img{max-width:100%;height:70px;object-fit:contain}
+    .sig-meta{font-size:11px;margin-top:4px;line-height:1.5}
+    .foot{margin-top:22px;text-align:center;font-size:10px;color:#b6bfc9;border-top:1px solid #dde3ea;padding-top:10px}
+    .bar{position:sticky;top:0;background:#3d5fa8;margin:-28px -28px 18px;padding:12px;display:flex;gap:10px;justify-content:center;z-index:10}
+    .bar button{border:none;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer}
+    .bar .share{background:#8bc63f;color:#fff}
+    .bar .print{background:#fff;color:#3d5fa8}
+    @media print{ body{padding:0} .no-print{display:none} }
+  </style></head><body>
+  ${previewOnly?`
+  <div class="bar no-print" style="background:#6b7a89">
+    <div style="color:#fff;font-weight:700;font-size:13px;align-self:center;padding:6px">👁 PREVIEW ONLY — sharing &amp; printing become available after both signatures</div>
+    <button class="print" onclick="window.close()">Close</button>
+  </div>
+  <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5"><div style="transform:rotate(-30deg);font-size:84px;font-weight:800;color:rgba(214,48,49,.10)">PREVIEW</div></div>`:`
+  <div class="bar no-print">
+    <button class="share" id="shareBtn" onclick="sharePdf()">📤 Share PDF</button>
+    <button class="print" onclick="window.print()">🖨 Print / Save as PDF</button>
+  </div>`}
+  <div id="rpt">
+  <div class="head">
+    <div>${logo?`<img src="${logo}">`:''}<h1>${t('Site Visit Report')}</h1></div>
+    <div class="rid">${t('Report ID')}: <b>${r.id}</b><br>${t('Submitted')}: ${r.submittedAt||new Date().toLocaleString()}</div>
+  </div>
+  <h2>${LANG==='ar'?'العميل':'Customer'}</h2>
+  <table>
+    <tr><td>${LANG==='ar'?'العميل':'Customer'}</td><td>${r.customer.name}</td></tr>
+    <tr><td>${t('Customer #')}</td><td>${r.customer.no}</td></tr>
+    <tr><td>${t('Address')}</td><td>${r.customer.addr}</td></tr>
+    ${r.clientRep&&r.clientRep.name?`<tr><td>${t('Client Rep')}</td><td>${r.clientRep.name}</td></tr>`:''}
+    ${r.clientRep&&r.clientRep.email?`<tr><td>${t('Email')}</td><td><a href="mailto:${r.clientRep.email}">${r.clientRep.email}</a></td></tr>`:''}
+    ${r.clientRep&&r.clientRep.phone?`<tr><td>${t('Phone')}</td><td>${r.clientRep.phone}</td></tr>`:''}
+  </table>
+  <h2>${t('Visit Details')}</h2>
+  <table>
+    <tr><td>${t('Visit Type')}</td><td>${r.visit.type?r.visit.type.split(' + ').map(tv).join(' + '):'—'}</td></tr>
+    ${r.workOrderNo?`<tr><td>${t('WO #')}</td><td>${r.workOrderNo}</td></tr>`:''}
+    <tr><td>${t('Governorate')}</td><td>${r.visit.governorate||'—'}</td></tr>
+    ${r.visit.zone?`<tr><td>${t('Zone')}</td><td>${r.visit.zone}</td></tr>`:''}
+    <tr><td>${t('Time')}</td><td>${r.visit.timeIn||'—'} → ${r.visit.timeOut||'—'}</td></tr>
+    <tr><td>${t('Odometer on Arrival (km)')}</td><td>${(r.visit.odometerArrival||r.visit.odometerIn)?Number(String(r.visit.odometerArrival||r.visit.odometerIn).replace(/[^\d]/g,'')).toLocaleString('en-US')+' '+t('km'):'—'}</td></tr>
+    ${r.isWarehouse?'':`<tr><td>${t('Pests & Services')}</td><td>${pestsWithServices(r)||'—'}</td></tr>`}
+    ${r.isWarehouse?'':`<tr><td>${t('Work Performed')}</td><td dir="auto">${r.work||'—'}</td></tr>`}
+    <tr><td>${t('Attended By')}</td><td>${r.pro.name} (${r.pro.code})</td></tr>
+    ${r.comments?`<tr><td>${t('Visit Comments')}</td><td dir="auto">${r.comments}</td></tr>`:''}
+  </table>
+  ${r.isWarehouse&&r.whMovement&&r.whMovement.length?`
+  <h2>${t('Materials & Equipment Movement')}</h2>
+  <table>
+    ${r.whMovement.filter(m=>m.dir==='Taken').length?`<tr><td>📤 ${t('Taken')}</td><td dir="auto">${r.whMovement.filter(m=>m.dir==='Taken').map(m=>'• '+m.qty+' '+tv(m.unit)+' — '+dispName(m.name)).join('<br>')}</td></tr>`:''}
+    ${r.whMovement.filter(m=>m.dir==='Returned').length?`<tr><td>📥 ${t('Returned')}</td><td dir="auto">${r.whMovement.filter(m=>m.dir==='Returned').map(m=>'• '+m.qty+' '+tv(m.unit)+' — '+dispName(m.name)).join('<br>')}</td></tr>`:''}
+  </table>`:''}
+  <h2>${t('Observations & Recommendations')}</h2>
+  ${obsHTML}
+  <h2>${t('Signatures')}</h2>
+  <div class="sigs">
+    ${sigBlock(r.customerSignature, r.isWarehouse?t('Warehouse Manager Signature'):t('Customer Signature'),true)}
+    ${sigBlock(r.proSignature,t('Pro Signature'),false)}
+  </div>
+  <div class="foot">© 2026 SOTAICO Pest Control — Generated by PesTrack Site Visit Report (Prototype)<br>This document was signed electronically with date, time and GPS location.</div>
+  </div>
+  <script>var RPT_FN=${JSON.stringify('PesTrack_Site_Visit_Report_'+((r.customer&&r.customer.name)||'report').replace(/\s+/g,'_')+'_'+(r.id||'')+'.pdf')};<\/script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+  <script>
+  var PDF_BLOB=null, PDF_FILE=null;
+  async function sharePdf(){
+    var btn=document.getElementById('shareBtn');
+    btn.textContent='Generating PDF…'; btn.disabled=true;
+    try{
+      if(typeof html2pdf==='undefined') throw new Error('No internet connection — the PDF library could not load. Use Print / Save as PDF instead.');
+      var el=document.getElementById('rpt');
+      var opt={margin:[12,8,20,8], filename:RPT_FN, image:{type:'jpeg',quality:0.92}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4'}};
+      var pdf=html2pdf().set(opt);
+      pdf.from(el).toPdf().get('pdf', function(instance){
+        var totalPages=instance.internal.getNumberOfPages();
+        for(var p=1;p<=totalPages;p++){
+          instance.setPage(p);
+          instance.setFontSize(10);
+          instance.setTextColor(150);
+          var pageSize=instance.internal.pageSize;
+          var bottomMargin=10;
+          instance.text('Page '+p+' of '+totalPages, pageSize.getWidth()/2, pageSize.getHeight()-bottomMargin, {align:'center'});
+        }
+      }).outputPdf('blob').then(blob=>{
+        PDF_BLOB=blob;
+        PDF_FILE=new File([PDF_BLOB],RPT_FN,{type:'application/pdf'});
+        showShareMenu();
+        btn.textContent='📤 Share PDF'; btn.disabled=false;
+      });
+    }catch(e){ 
+      if(e.name!=='AbortError') alert(e.message); 
+      btn.textContent='📤 Share PDF'; btn.disabled=false;
+    }
+  }
+  function showShareMenu(){
+    var email=${JSON.stringify((r.clientRep&&r.clientRep.email)||'')};
+    var phone=${JSON.stringify((r.clientRep&&r.clientRep.phone)||'')};
+    var old=document.getElementById('shareMenu'); if(old) old.remove();
+    var d=document.createElement('div'); d.id='shareMenu';
+    d.style.cssText='position:fixed;inset:0;background:rgba(15,25,35,.55);z-index:99;display:flex;align-items:center;justify-content:center';
+    var b=function(label,action,outline){
+      var s=outline?'background:#fff;color:#6b7a89;border:2px solid #dde3ea':'background:#3d5fa8;color:#fff;border:none';
+      return '<button style="display:block;width:100%;margin:7px 0;padding:14px;border-radius:10px;'+s+';font-size:15px;font-weight:700;cursor:pointer" onclick="closeShareMenu();'+action+'">'+label+'</button>';
+    };
+    var inner='<div style="background:#fff;border-radius:14px;padding:20px;max-width:360px;width:92%">'
+      +'<div style="font-weight:800;font-size:16px;color:#22303e">Send the PDF</div>'
+      +'<div style="font-size:12px;color:#6b7a89;margin:4px 0 10px">Optional — the report is already submitted and saved. Choose an option, or close this menu.</div>';
+    if(email) inner+=b('📧 Email — '+email,"sendEmail('"+email+"')");
+    if(phone) inner+=b('💬 WhatsApp — '+phone,"sendWhatsApp('"+phone+"')");
+    inner+=b('📤 Phone share menu (AirDrop, apps…)','sharePhone()');
+    inner+=b('💾 Download PDF','downloadOnly()');
+    inner+=b('Close','void(0)',true);
+    inner+='</div>';
+    d.innerHTML=inner;
+    document.body.appendChild(d);
+  }
+  function closeShareMenu(){ var x=document.getElementById('shareMenu'); if(x) x.remove(); }
+  // NOTE (HO portal backlog): sender address (customer.service@sotaico.com) and this standard email/WhatsApp text must be editable in the HO portal once built - not hardcoded.
+  function sendEmail(email){
+    var subject='PesTrack Site Visit Report';
+    var body='Dear Client,\\n\\nPlease find attached your PesTrack Site Visit Report.\\n\\nBest regards,\\nSOTAICO Pest Control';
+    window.location.href='mailto:'+email+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+    setTimeout(()=>downloadOnly(),500);
+  }
+  function sendWhatsApp(phone){
+    var msg='Hi, here is your PesTrack Site Visit Report from SOTAICO Pest Control.';
+    var url='https://wa.me/'+phone.replace(/\\D/g,'')+'?text='+encodeURIComponent(msg);
+    window.open(url,'_blank');
+    setTimeout(()=>downloadOnly(),500);
+  }
+  function sharePhone(){
+    if(navigator.canShare && navigator.canShare({files:[PDF_FILE]})){
+      navigator.share({files:[PDF_FILE], title:'PesTrack Site Visit Report'}).catch(()=>{});
+    } else downloadOnly();
+  }
+  function downloadOnly(){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(PDF_BLOB); a.download=RPT_FN; a.click();
+  }
+  <\/script>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){ toast("Popup blocked — allow popups to generate the PDF"); return; }
+  w.document.write(html); w.document.close();
+}
+
+/* ================= PHASE 3B — CS SCHEDULER PLAN RECEIVER (INTEGRATION_SPEC v1.8 §3–§6) ================= */
+/* A plan is active until planDate+1 05:00 (§1). */
+function planExpiry(planDate){ const p=String(planDate).split('-').map(Number); return new Date(p[0],p[1]-1,p[2]+1,5,0,0,0); }
+function planExpired(planDate){ return NOW().getTime() >= planExpiry(planDate).getTime(); }
+function isNightWindow(win){ const m=String(win||'').match(/^(\d{1,2}):/); if(!m) return false; const h=+m[1]; return h>=0 && h<5; }
+function winLabel(win){ if(!win) return '—'; return win + (isNightWindow(win)?' 🌙':''); }
+function planStore(){ return load('pt_plans', {}); }
+function planSave(all){ store('pt_plans', all); }
+function planKey(planDate, proCode){ return planDate+'|'+proCode; }
+/* Read #plan=<URL-encoded base64 UTF-8 JSON> — decoder MIRRORS CSS b64u encoder exactly (§3). */
+function decodePlanHash(){
+  const h=location.hash||''; const i=h.indexOf('plan='); if(i<0) return null;
+  try{
+    const b64=decodeURIComponent(h.slice(i+5));
+    const plan=JSON.parse(decodeURIComponent(escape(atob(b64))));
+    if(plan && plan.planDate && plan.proCode && Array.isArray(plan.visits)) return plan;
+  }catch(e){ /* not a valid plan payload */ }
+  return null;
+}
+function stripPlanHash(){ try{ history.replaceState(null,'', location.pathname+location.search); }catch(e){ location.hash=''; } }
+function diffPlans(oldPlan, newPlan){
+  const oldBy={}, newBy={};
+  (oldPlan.visits||[]).forEach(v=>oldBy[v.scheduleId]=v);
+  (newPlan.visits||[]).forEach(v=>newBy[v.scheduleId]=v);
+  const added=[], removed=[], changed=[];
+  Object.keys(newBy).forEach(sid=>{ if(!oldBy[sid]) added.push(newBy[sid]); });
+  Object.keys(oldBy).forEach(sid=>{ if(!newBy[sid]) removed.push(oldBy[sid]); });
+  Object.keys(newBy).forEach(sid=>{
+    const o=oldBy[sid], n=newBy[sid]; if(!o) return;
+    const flds=[];
+    if((o.window||'')!==(n.window||'')) flds.push('time');
+    if((o.customerNo||'')!==(n.customerNo||'')||(o.customerName||'')!==(n.customerName||'')) flds.push('customer');
+    if((o.area||'')!==(n.area||'')) flds.push('area');
+    if((o.phase||'')!==(n.phase||'')) flds.push('phase');
+    if(flds.length) changed.push({visit:n, fields:flds});
+  });
+  return {added, removed, changed};
+}
+/* Store an incoming plan: replace when planDate+proCode match and generatedAt is newer; discard expired (§3). */
+function ingestPlan(plan){
+  if(planExpired(plan.planDate)) return {status:'expired', plan:plan};
+  const all=planStore(); const key=planKey(plan.planDate, plan.proCode);
+  const existing=all[key];
+  if(existing && existing.plan && existing.plan.generatedAt && plan.generatedAt <= existing.plan.generatedAt){
+    return {status:'stale', plan:plan};   // older or same generatedAt — ignore
+  }
+  const rec={ plan:plan, storedAt:new Date().toISOString(), updatedAt:null, diff:null };
+  if(existing && existing.plan){ rec.updatedAt=new Date().toISOString(); rec.diff=diffPlans(existing.plan, plan); }
+  all[key]=rec;
+  Object.keys(all).forEach(k=>{ const pd=(all[k].plan||{}).planDate; if(pd && planExpired(pd)) delete all[k]; });   // housekeeping
+  planSave(all);
+  return {status: existing?'updated':'new', plan:plan, rec:rec};
+}
+let PENDING_PLAN_MSG=null;
+function ingestBundle(b){
+  let added=0, updated=0, expired=0, stale=0;
+  (b.days||[]).forEach(d=>{
+    const plan={ planDate:d.planDate, proCode:b.proCode, generatedAt:b.generatedAt, visits:d.visits||[], dayLoad:d.dayLoad||{} };
+    const r=ingestPlan(plan);
+    if(r.status==='new') added++; else if(r.status==='updated') updated++; else if(r.status==='expired') expired++; else stale++;
+  });
+  return {status:'bundle', bundle:b, added, updated, expired, stale};
+}
+function ingestAny(obj){ return (obj && Array.isArray(obj.days) && obj.proCode) ? ingestBundle(obj) : ingestPlan(obj); }
+function processPlanHash(){
+  const hh=location.hash||''; const i=hh.indexOf('plan='); if(i<0) return;
+  let obj=null;
+  try{ obj=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hh.slice(i+5)))))); }catch(e){ return; }
+  if(!obj) return;
+  if(Array.isArray(obj.days) && obj.proCode){ PENDING_PLAN_MSG=ingestBundle(obj); stripPlanHash(); }
+  else if(obj.planDate && obj.proCode && Array.isArray(obj.visits)){ PENDING_PLAN_MSG=ingestPlan(obj); stripPlanHash(); }
+}
+function showPendingPlanMsg(){
+  if(!PENDING_PLAN_MSG) return;
+  const m=PENDING_PLAN_MSG; PENDING_PLAN_MSG=null;
+  if(m.status==='bundle'){
+    const b=m.bundle; let msg='📅 '+(LANG==='ar'?'وصل جدول — ':'Schedule received — ')+b.proCode+' · '+((b.days&&b.days.length)||0)+' '+(LANG==='ar'?'يوم':'days');
+    if(session && b.proCode!==session.code) msg+=' · '+(LANG==='ar'?'أنت ':'you are ')+session.code;
+    toast(msg); return;
+  }
+  const p=m.plan;
+  let msg;
+  if(m.status==='expired') msg='⚠ Plan expired ('+p.planDate+') — discarded';
+  else if(m.status==='stale') msg='Plan already up to date — '+p.proCode;
+  else if(m.status==='updated') msg='🔄 Plan updated for '+p.proCode+' ('+p.planDate+')';
+  else msg='📅 Plan received — '+p.proCode+' · '+p.planDate;
+  if(session && p.proCode!==session.code) msg+=' · note: you are '+session.code;
+  toast(msg);
+}
+function currentPlanRec(){
+  if(!session) return null;
+  const rec=planStore()[planKey(opDayISO(), session.code)];
+  if(!rec || !rec.plan || planExpired(rec.plan.planDate)) return null;
+  return rec;
+}
+/* ---- Done inference (§6): scheduleRef match, else same op-day + customerNo + shared pest/service pair ---- */
+function reportPestsFlat(r){
+  const out=[];
+  (r.pests||[]).forEach(p=>{ const svc=(r.services&&r.services[p])||[]; if(svc.length) svc.forEach(s=>out.push(p+'|'+s)); out.push(p); });
+  return out;
+}
+function visitPlannedPairs(v){
+  const out=[];
+  Object.keys(v.pests||{}).forEach(p=>{ const svc=v.pests[p]||[]; if(svc.length) svc.forEach(s=>out.push(p+'|'+s)); out.push(p); });
+  return out;
+}
+function computePlanDone(plan, reports){
+  const dayReports=(reports||[]).filter(r=>(r.opDay||'')===plan.planDate);
+  const map={};
+  (plan.visits||[]).forEach(v=>{
+    const ref=dayReports.find(r=>r.scheduleRef && r.scheduleRef.scheduleId===v.scheduleId);
+    if(ref){ map[v.scheduleId]={done:true, matched:'ref'}; return; }
+    if(v.customerNo){
+      const pairs=visitPlannedPairs(v);
+      const inf=dayReports.find(r=>r.customer && r.customer.no===v.customerNo && reportPestsFlat(r).some(x=>pairs.includes(x)));
+      if(inf){ map[v.scheduleId]={done:true, matched:'inferred'}; return; }
+    }
+    map[v.scheduleId]={done:false};
+  });
+  return map;
+}
+/* ---- budget guidance chip (display-only; NEVER pre-added to actuals — §4) ---- */
+function planBudgetChip(b){
+  if(!b) return '';
+  const parts=[];
+  (b.products||[]).forEach(p=>parts.push(p.qty+' '+tv(p.unit)+' '+dispName(p.product)));
+  (b.equipment||[]).forEach(e=>parts.push('🔧 '+e.qty+'× '+dispName(e.name)));
+  let s=parts.join(' · ');
+  if(b.techs) s+=(s?' · ':'')+'👷 '+b.techs;
+  if(b.minutes) s+=' · ⏱ '+b.minutes+'m';
+  return s;
+}
+/* ---- 📅 Today's Visits + 📦 Today's Load + 🔄 plan-update diff (§4) ---- */
+function renderPlanCards(reports){
+  const box=$('planCards'); if(!box) return;
+  if(reports===undefined){ dbGetReports().then(rs=>renderPlanCards(rs)); return; }
+  const rec=currentPlanRec();
+  if(!rec){ box.innerHTML=planEmptyState()+navButtons(); return; }
+  const plan=rec.plan, doneMap=computePlanDone(plan, reports);
+  let banner='';
+  if(rec.updatedAt && rec.diff){
+    const u=new Date(rec.updatedAt), hm=String(u.getHours()).padStart(2,'0')+':'+String(u.getMinutes()).padStart(2,'0');
+    const d=rec.diff, bits=[];
+    if(d.added.length) bits.push('+'+d.added.length+' '+(LANG==='ar'?'أضيفت':'added'));
+    if(d.removed.length) bits.push('−'+d.removed.length+' '+(LANG==='ar'?'أُزيلت':'removed'));
+    if(d.changed.length) bits.push('~'+d.changed.length+' '+(LANG==='ar'?'تغيّرت':'changed'));
+    banner='<div class="plan-upd">🔄 '+(LANG==='ar'?'حُدّثت الخطة':'Plan updated')+' '+hm+(bits.length?' · '+bits.join(' · '):'')+'</div>';
+    if(d.removed.length) banner+='<div class="plan-removed">'+(LANG==='ar'?'أُزيلت':'Removed')+': '+d.removed.map(v=>v.customerName||v.customerNo||v.scheduleId).join(', ')+'</div>';
+  }
+  const tagOf={};
+  if(rec.diff){ (rec.diff.added||[]).forEach(v=>tagOf[v.scheduleId]='added'); (rec.diff.changed||[]).forEach(c=>tagOf[c.visit.scheduleId]=c.fields); }
+  const visits=(plan.visits||[]).slice().sort((a,b)=>(a.seq||0)-(b.seq||0));
+  const rows=visits.map(v=>{
+    const dn=doneMap[v.scheduleId]||{}, tag=tagOf[v.scheduleId];
+    const chg = tag==='added' ? '<span class="plan-chg">'+(LANG==='ar'?'جديدة':'new')+'</span>'
+      : (Array.isArray(tag)?'<span class="plan-chg">'+(LANG==='ar'?'تغيّرت':'changed')+'</span>':'');
+    const joint = v.jointWith ? '<span class="plan-joint">🤝 '+(LANG==='ar'?'مع':'with')+' '+v.jointWith+(v.jointRole?' ('+tv(v.jointRole)+')':'')+'</span>' : '';
+    const meta=[]; if(v.area) meta.push('🏢 '+v.area); if(v.phase) meta.push('⇄ '+tv(v.phase)); if(v.woNum) meta.push('WO#'+v.woNum);
+    const pests=Object.keys(v.pests||{}).map(p=>tv(p)+((v.pests[p]&&v.pests[p].length)?' ['+v.pests[p].map(tv).join('; ')+']':'')).join(' · ');
+    const infTag = (dn.matched==='inferred') ? ' <span class="plan-chg" style="background:var(--muted)">≈ '+(LANG==='ar'?'استُنتج':'inferred')+'</span>' : '';
+    return '<div class="plan-visit '+(dn.done?'done':'')+'" onclick="startPlannedReport(\''+v.scheduleId+'\')">'+
+      '<div class="pv-top"><span class="pv-seq">'+(dn.done?'✓':(v.seq||'•'))+'</span>'+
+      '<span class="pv-cust">'+(v.customerName||v.customerNo||'')+'</span>'+
+      '<span class="pv-win">'+winLabel(v.window)+'</span></div>'+
+      '<div class="pv-sub">'+pests+(meta.length?' · '+meta.join(' · '):'')+(chg?' '+chg:'')+infTag+'</div>'+
+      (joint?'<div class="pv-sub">'+joint+'</div>':'')+
+      (v.budget?'<div class="pv-bud">💰 '+(LANG==='ar'?'خطة':'Plan')+': '+planBudgetChip(v.budget)+'</div>':'')+
+      '</div>';
+  }).join('');
+  const dl=plan.dayLoad||{};
+  const load=((dl.products||[]).map(x=>'<div class="line-item"><span>🧪 '+dispName(x.name)+'</span><span><b>'+x.qty+' '+tv(x.unit)+'</b>'+(x.packages?' <span style="color:var(--muted);font-size:12px">('+x.packages+')</span>':'')+'</span></div>').join('')
+    + (dl.equipment||[]).map(x=>'<div class="line-item"><span>🔧 '+dispName(x.name)+'</span><span><b>'+x.qty+' '+tv(x.unit)+'</b></span></div>').join(''));
+  const doneCount=visits.filter(v=>(doneMap[v.scheduleId]||{}).done).length;
+  box.innerHTML=
+    '<div class="card"><h3>📅 '+(LANG==='ar'?'زيارات اليوم':"Today's Visits")+' <span style="font-weight:400;color:var(--muted)">('+doneCount+'/'+visits.length+' ✓ · '+plan.planDate+')</span></h3>'+
+      banner+
+      (visits.length?rows:'<div class="footer-note">'+(LANG==='ar'?'لا زيارات مخطّطة':'No planned visits')+'</div>')+
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">'+(LANG==='ar'?'اضغط زيارة لبدء تقرير مُعبّأ مسبقًا':'Tap a visit to start a pre-filled report')+'</div>'+
+      (localStorage.getItem('pt_now')?'<div style="margin-top:10px"><button class="btn btn-danger btn-sm" style="display:inline-block" onclick="clearTestPlan()">🧪✕ '+(LANG==='ar'?'إنهاء وضع الاختبار':'Exit test mode')+'</button></div>':'')+
+    '</div>'+
+    (load?'<div class="card"><h3>📦 '+(LANG==='ar'?'حمولة اليوم':"Today's Load")+'</h3>'+load+'</div>':'')+
+    navButtons();
+}
+/* ---- Empty state + manual link paste + bundled sample (visible proof of the CS receiving side) ---- */
+const SAMPLE_PLAN_B64="eyJwbGFuRGF0ZSI6IjIwMjYtMDgtMDEiLCJwcm9Db2RlIjoiUHJvMDAxIiwiZ2VuZXJhdGVkQXQiOiIyMDI2LTA4LTA3VDE4OjU1OjAzLjM3NVoiLCJ2aXNpdHMiOlt7InNlcSI6MSwic2NoZWR1bGVJZCI6Ik9CTC0wMDAwMSIsImN1c3RvbWVyTm8iOiIwMjEtVEVTVC0wMjEvMDEiLCJjdXN0b21lck5hbWUiOiJPIFJlc3RhdXJhbnRzIOKAlCBaYW1hbGVrIiwidmlzaXRUeXBlIjoiQ29udHJhY3R1YWwiLCJ3aW5kb3ciOiIwMDowMCIsInBlc3RzIjp7IkZsaWVzIjpbIlNwYWNlIHNwcmF5Il19LCJidWRnZXQiOnsicHJvZHVjdHMiOlt7InByb2R1Y3QiOiJUZXN0IFNwcmF5IEEgKGJ1bGspIiwicXR5IjoxLCJ1bml0IjoibGl0ZXJzIn1dLCJ0ZWNocyI6MSwibWludXRlcyI6NDV9fSx7InNlcSI6Miwic2NoZWR1bGVJZCI6Ik9CTC0wMDAwMiIsImN1c3RvbWVyTm8iOiIwMjEtVEVTVC0wMjEvMDEiLCJjdXN0b21lck5hbWUiOiJPIFJlc3RhdXJhbnRzIOKAlCBaYW1hbGVrIiwidmlzaXRUeXBlIjoiQ29udHJhY3R1YWwiLCJ3aW5kb3ciOiIwMTowMCIsInBoYXNlIjoiU3BhY2Ugc3ByYXkiLCJqb2ludFdpdGgiOiJQcm8wMDIiLCJqb2ludFJvbGUiOiJsZWFkIiwicGVzdHMiOnsiQ29ja3JvYWNoZXMiOlsiU3BhY2Ugc3ByYXkiLCJEcmFpbiBzcHJheSJdfSwiYnVkZ2V0Ijp7InByb2R1Y3RzIjpbeyJwcm9kdWN0IjoiVGVzdCBTcHJheSBBIChidWxrKSIsInF0eSI6MiwidW5pdCI6ImxpdGVycyJ9XSwiZXF1aXBtZW50IjpbeyJuYW1lIjoiVGVzdCBGb2FtZXIgQiIsInF0eSI6MSwidW5pdCI6ImVhY2gifV0sInRlY2hzIjoyLCJtaW51dGVzIjo5MH0sIm5vdGVzIjoiUm90YXRlIHNwcmF5IGFuZCBnZWwgc28gYmFpdCBpcyBub3Qgd2FzaGVkIG9mZi4ifSx7InNlcSI6Mywic2NoZWR1bGVJZCI6Ik9CTC0wMDAwMyIsImN1c3RvbWVyTm8iOiIwMjEtVEVTVC0wMjEvMDEiLCJjdXN0b21lck5hbWUiOiJPIFJlc3RhdXJhbnRzIOKAlCBaYW1hbGVrIiwidmlzaXRUeXBlIjoiQ29udHJhY3R1YWwiLCJ3aW5kb3ciOiIwMjowMCIsInBlc3RzIjp7IlJvZGVudHMiOlsiQWJvdmUgZ3JvdW5kIl19LCJidWRnZXQiOnsicHJvZHVjdHMiOlt7InByb2R1Y3QiOiJUZXN0IFBhc3RlIEMiLCJxdHkiOjQsInVuaXQiOiJlYWNoIn1dLCJ0ZWNocyI6MSwibWludXRlcyI6NDB9LCJub3RlcyI6IjEyIGV4dGVybmFsIGJhaXQgc3RhdGlvbnMuIn1dLCJkYXlMb2FkIjp7InByb2R1Y3RzIjpbeyJuYW1lIjoiVGVzdCBTcHJheSBBIChidWxrKSIsInF0eSI6MywidW5pdCI6ImxpdGVycyIsInBhY2thZ2VzIjoiNHggMUwgc3ByYXllciJ9LHsibmFtZSI6IlRlc3QgUGFzdGUgQyIsInF0eSI6NCwidW5pdCI6ImVhY2gifV0sImVxdWlwbWVudCI6W3sibmFtZSI6IlRlc3QgRm9hbWVyIEIiLCJxdHkiOjEsInVuaXQiOiJlYWNoIn1dLCJ0ZWNoc01heCI6Mn19";  // real CSS v0.15 export — Pro001, planDate 2026-08-01
+function planEmptyState(){
+  const testing=!!localStorage.getItem('pt_now');
+  return '<div class="card"><h3>📅 '+(LANG==='ar'?"زيارات اليوم":"Today's Visits")+'</h3>'+
+    '<div style="font-size:13px;color:var(--muted);line-height:1.55">'+
+    (LANG==='ar'
+      ? 'لا توجد خطة يوم محمّلة. تصل خطط اليوم من <b>مُجدوِل خدمة العملاء (CSS)</b> كرابط واتساب/لصق يفتح هذه الصفحة ويحمّل 📅 زيارات اليوم و📦 حمولة اليوم تلقائيًا.'
+      : 'No day plan loaded yet. Day plans arrive from the <b>CS Scheduler (CSS)</b> as a WhatsApp / paste link that opens this page and auto-loads 📅 Today\'s Visits and 📦 Today\'s Load.')+
+    '</div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="btn btn-outline btn-sm" style="display:inline-block" onclick="pastePlanLink()">📋 '+(LANG==='ar'?'لصق رابط خطة':'Paste a plan link')+'</button>'+
+      '<button class="btn btn-blue btn-sm" style="display:inline-block" onclick="loadSamplePlan()">▶ '+(LANG==='ar'?'خطة نموذجية (يوم)':'Try sample day')+'</button>'+
+      '<button class="btn btn-blue btn-sm" style="display:inline-block" onclick="loadSampleWeek()">🗓 '+(LANG==='ar'?'أسبوع نموذجي':'Try sample week')+'</button>'+
+      (testing?'<button class="btn btn-danger btn-sm" style="display:inline-block" onclick="clearTestPlan()">🧪✕ '+(LANG==='ar'?'إنهاء وضع الاختبار':'Exit test mode')+'</button>':'')+
+    '</div></div>';
+}
+function decodePlanFromString(v){
+  const i=v.indexOf('plan='); const raw=(i>=0?v.slice(i+5):v).split('#')[0].split('&')[0].trim();
+  try{ return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(raw))))); }
+  catch(e){ try{ return JSON.parse(decodeURIComponent(escape(atob(raw)))); }catch(e2){ return null; } }
+}
+function pastePlanLink(){
+  const v=prompt(LANG==='ar'?'الصق رابط خطة CSS كاملاً (يحتوي #plan=):':'Paste the full CS plan link (contains #plan=):');
+  if(!v) return;
+  const obj=decodePlanFromString(v);
+  const isBundle=obj && Array.isArray(obj.days) && obj.proCode;
+  const ok = isBundle || (obj && obj.planDate && obj.proCode && Array.isArray(obj.visits));
+  if(!ok){ toast(LANG==='ar'?'رابط غير صالح':'Not a valid plan/schedule link'); return; }
+  const dates = isBundle ? (obj.days||[]).map(d=>d.planDate) : [obj.planDate];
+  const allExpired = dates.every(d=>planExpired(d));
+  if(allExpired){
+    if(!confirm((LANG==='ar'?'الخطة بتاريخ ':'This plan is dated ')+dates[0]+(LANG==='ar'?' وليست اليوم التشغيلي الحالي. عرضها في وضع اختبار؟':' — not the current operational day. View it in test mode?'))) return;
+    localStorage.setItem('pt_now', dates[0]+'T10:00');
+  }
+  PENDING_PLAN_MSG=ingestAny(obj);
+  if(session && obj.proCode!==session.code) toast('📅 '+(LANG==='ar'?'الخطة لـ ':'This is for ')+obj.proCode+(LANG==='ar'?' — سجّل الدخول بذلك الكود':' — log in as that Pro to view'));
+  renderHome();
+}
+function loadSamplePlan(){
+  const plan=decodePlanFromString(SAMPLE_PLAN_B64);
+  if(!plan){ toast('Sample decode failed'); return; }
+  localStorage.setItem('pt_now', plan.planDate+'T10:00');   // sample is dated 2026-08-01 — enter test mode so it isn't expired (§7 hidden setting)
+  const all=planStore(); all[planKey(plan.planDate, plan.proCode)]={plan:plan, storedAt:new Date().toISOString(), updatedAt:null, diff:null}; planSave(all);
+  if(session && session.code!==plan.proCode) toast('🧪 '+(LANG==='ar'?'الخطة النموذجية لـ ':'Sample is for ')+plan.proCode+' — '+(LANG==='ar'?'سجّل الدخول ':'log in as ')+plan.proCode+'/1234');
+  else toast('🧪 '+(LANG==='ar'?'حُمّلت الخطة النموذجية (وضع اختبار)':'Sample plan loaded (test mode)')+' · '+plan.planDate);
+  renderHome();
+}
+function clearTestPlan(){
+  localStorage.removeItem('pt_now'); localStorage.removeItem('pt_plans');
+  toast(LANG==='ar'?'انتهى وضع الاختبار':'Test mode cleared'); renderHome();
+}
+/* ---- Prefill Section A from a planned visit (§4/§5); budget stays guidance-only ---- */
+function findPlannedVisit(sid){
+  const rec=currentPlanRec(); if(!rec) return null;
+  const v=(rec.plan.visits||[]).find(x=>x.scheduleId===sid);
+  return v ? {plan:rec.plan, visit:v} : null;
+}
+function startPlannedReport(sid){
+  const found=findPlannedVisit(sid);
+  if(!found){ toast('Planned visit not found — plan may have expired'); return; }
+  const v=found.visit, plan=found.plan;
+  startNewReport();          // full reset, shows scr-kind
+  chooseKind('client');      // customer visit → shows scr-a
+  draft.scheduleRef={ scheduleId:v.scheduleId, planDate:plan.planDate };   // stamp (§6)
+  draft.planBudget=v.budget||null;
+  const cust=v.customerNo ? CUSTOMERS.find(c=>c.no===v.customerNo) : null;
+  if(cust){
+    document.querySelectorAll('#fVisitType button').forEach(b=>b.classList.toggle('sel', b.dataset.v===(v.visitType||'Contractual')));
+    pickCustomer(cust.no);
+  } else {
+    // fallback: customerName as Work-Order-style manual entry (§4)
+    document.querySelectorAll('#fVisitType button').forEach(b=>b.classList.remove('sel'));
+    const woBtn=[...document.querySelectorAll('#fVisitType button')].find(b=>b.dataset.v==='Work Order');
+    if(woBtn) woBtn.classList.add('sel');
+    selectedCustomer=null;
+    $('woName').value=v.customerName||''; $('woAddr').value=''; $('woNum').value=v.woNum||'';
+  }
+  updateWoMode();
+  // pests + services pre-ticked
+  renderPestChecks();
+  document.querySelectorAll('#fPests input').forEach(c=>{ c.checked=!!(v.pests&&v.pests[c.value]); });
+  draft._svc={}; Object.keys(v.pests||{}).forEach(p=>{ draft._svc[p]=(v.pests[p]||[]).slice(); });
+  renderPestSubs();
+  // budget guidance chip — NEVER pre-added to consumables/technicians (§4)
+  const pg=$('planGuide');
+  if(pg){
+    if(v.budget){ pg.style.display='block'; pg.innerHTML='💰 '+(LANG==='ar'?'خطة':'Plan')+': '+planBudgetChip(v.budget)+' <span style="color:var(--muted);font-weight:400">— '+(LANG==='ar'?'إرشادي فقط؛ سجّل الاستهلاك الفعلي':'guidance only — record actual usage')+'</span>'; }
+    else { pg.style.display='none'; pg.innerHTML=''; }
+  }
+  toast(LANG==='ar'?'مُعبّأ من الخطة — كل الحقول قابلة للتعديل':'Pre-filled from plan — everything stays editable');
+}
+
+
+/* ================= PHASE 3C — MULTI-DAY SCHEDULE + WAREHOUSE PICKUP (INTEGRATION_SPEC §2-§4, v1.9 proposed) ================= */
+/* All stored, non-expired day-plans for this Pro from the operational day forward (from daily links OR a bundle). */
+function upcomingPlanRecs(){
+  if(!session) return [];
+  const all=planStore(), od=opDayISO(), out=[];
+  Object.keys(all).forEach(k=>{ const r=all[k], pl=r&&r.plan; if(!pl||pl.proCode!==session.code) return; if(planExpired(pl.planDate)) return; if(pl.planDate>=od) out.push({planDate:pl.planDate, rec:r}); });
+  out.sort((a,b)=>a.planDate<b.planDate?-1:1);
+  return out;
+}
+function pickDates(n){ const u=upcomingPlanRecs().map(x=>x.planDate); return n>=99?u:u.slice(0,n); }
+/* dayLoad is already lead-only + raw qty per day (CSS §2) — sum raw across days, then re-round packaging. */
+function aggregatePickup(dates){
+  const all=planStore(), prod={}, eq={};
+  dates.forEach(d=>{ const r=all[planKey(d, session.code)], dl=r&&r.plan&&r.plan.dayLoad; if(!dl) return;
+    (dl.products||[]).forEach(p=>{ const key=p.name+'|'+p.unit; prod[key]=(prod[key]||0)+p.qty; });
+    (dl.equipment||[]).forEach(e=>{ eq[e.name]=(eq[e.name]||0)+e.qty; });
+  });
+  return {prod, eq};
+}
+/* physical-package rounding — mirrors CSS Warehouse Pickup List (§1.6/§2): +10% on liquids, greedy largest-first. */
+function packQty(prodName, qty){
+  const prod=PRODUCTS.find(p=>p.name===prodName);
+  if(!prod || !prod.packages) return '';
+  let need=qty*1.10;                                   // +10% safety margin on liquids (HO-configurable in production)
+  const sizes=prod.packages.slice().sort((a,b)=>b.size-a.size);
+  const counts={}; let covered=0;
+  sizes.forEach(p=>{ const n=Math.floor((need-covered)/p.size); if(n>0){ counts[p.label]=n; covered+=n*p.size; } });
+  if(covered<need){ const rem=need-covered; const fit=sizes.slice().reverse().find(p=>p.size>=rem)||sizes[sizes.length-1]; counts[fit.label]=(counts[fit.label]||0)+1; }
+  return Object.keys(counts).map(k=>counts[k]+'x '+k).join(' + ');
+}
+const _DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], _MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _pd(iso){ const p=String(iso).split('-').map(Number); return new Date(p[0],p[1]-1,p[2]); }
+function fmtDateLong(iso){ const d=_pd(iso); return _DOW[d.getDay()]+' '+d.getDate()+' '+_MON[d.getMonth()]; }
+function fmtDateShort(iso){ const d=_pd(iso); return d.getDate()+' '+_MON[d.getMonth()]; }
+function navButtons(){
+  if(!upcomingPlanRecs().length) return '';
+  return '<div style="display:flex;gap:8px;margin-bottom:14px">'+
+    '<button class="btn btn-outline btn-sm" style="flex:1;display:block" onclick="openSchedule()">🗓 '+(LANG==='ar'?'جدولي':'My Schedule')+'</button>'+
+    '<button class="btn btn-blue btn-sm" style="flex:1;display:block" onclick="openPickup()">📦 '+(LANG==='ar'?'صرف المخزن':'Warehouse Pickup')+'</button></div>';
+}
+/* ---- 🗓 My Schedule ---- */
+function renderSchedule(){
+  const u=upcomingPlanRecs();
+  if(!u.length){ $('schedList').innerHTML='<div class="footer-note">'+(LANG==='ar'?'لا خطط محمّلة':'No plans loaded yet')+'</div>'; return; }
+  dbGetReports().then(reports=>{
+    $('schedList').innerHTML=u.map(x=>{
+      const plan=x.rec.plan, dm=computePlanDone(plan, reports);
+      const visits=(plan.visits||[]).slice().sort((a,b)=>(a.seq||0)-(b.seq||0));
+      const done=visits.filter(v=>(dm[v.scheduleId]||{}).done).length;
+      const isToday=plan.planDate===opDayISO();
+      const rows=visits.map(v=>{ const d=dm[v.scheduleId]||{}, joint=v.jointWith?' · 🤝 '+v.jointWith:'', meta=[];
+        if(v.area) meta.push('🏢 '+v.area); if(v.phase) meta.push('⇄ '+tv(v.phase)); if(v.woNum) meta.push('WO#'+v.woNum);
+        return '<div class="plan-visit '+(d.done?'done':'')+'" onclick="scheduleVisitTap(\''+plan.planDate+'\',\''+v.scheduleId+'\')">'+
+          '<div class="pv-top"><span class="pv-seq">'+(d.done?'✓':(v.seq||'•'))+'</span><span class="pv-cust">'+(v.customerName||v.customerNo||'')+'</span><span class="pv-win">'+winLabel(v.window)+'</span></div>'+
+          '<div class="pv-sub">'+Object.keys(v.pests||{}).map(p=>tv(p)).join(' · ')+(meta.length?' · '+meta.join(' · '):'')+joint+'</div></div>'; }).join('');
+      return '<div class="card"><h3 style="'+(isToday?'color:var(--green)':'')+'">'+(isToday?'⭐ ':'')+fmtDateLong(plan.planDate)+' <span style="font-weight:400;color:var(--muted)">('+done+'/'+visits.length+' ✓)</span></h3>'+
+        (visits.length?rows:'<div class="footer-note">'+(LANG==='ar'?'لا زيارات':'No visits')+'</div>')+'</div>';
+    }).join('');
+  });
+}
+function openSchedule(){ renderSchedule(); show('scr-schedule'); }
+function scheduleVisitTap(planDate, sid){
+  if(planDate===opDayISO()){ show('scr-home'); startPlannedReport(sid); }
+  else { toast(LANG==='ar'?'زيارة مجدولة — تُعبّأ للتقرير في يومها':'Scheduled visit — opens for reporting on its own day'); }
+}
+/* ---- 📦 Warehouse Pickup (range-selectable) ---- */
+let PICK_DAYS=1;
+function pickRangeSel(btn){ document.querySelectorAll('#pickRange button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); PICK_DAYS=+btn.dataset.d; renderPickup(); }
+function renderPickup(){
+  const dates=pickDates(PICK_DAYS), agg=aggregatePickup(dates);
+  $('pickInfo').innerHTML = dates.length ? ('📅 '+dates.map(fmtDateShort).join(' · ')) : (LANG==='ar'?'لا خطط في المدى':'No plans in this range');
+  const rows=Object.keys(agg.prod).sort().map(k=>{ const kk=k.split('|'), pk=packQty(kk[0],agg.prod[k]);
+      return '<div class="line-item"><span>🧪 '+dispName(kk[0])+'</span><span><b>'+(Math.round(agg.prod[k]*10)/10)+' '+tv(kk[1])+'</b>'+(pk?' <span style="color:var(--muted);font-size:12px">('+pk+')</span>':'')+'</span></div>'; }).join('')
+    + Object.keys(agg.eq).sort().map(n=>'<div class="line-item"><span>🔧 '+dispName(n)+'</span><span><b>'+agg.eq[n]+' '+tv('each')+'</b></span></div>').join('');
+  $('pickList').innerHTML = rows || '<div class="footer-note">'+(LANG==='ar'?'لا مواد في المدى':'No materials in this range')+'</div>';
+}
+function openPickup(){ PICK_DAYS=1; document.querySelectorAll('#pickRange button').forEach(b=>b.classList.toggle('sel', b.dataset.d==='1')); renderPickup(); show('scr-pickup'); }
+function startWhFromPickup(){
+  const dates=pickDates(PICK_DAYS), agg=aggregatePickup(dates);
+  if(!Object.keys(agg.prod).length && !Object.keys(agg.eq).length){ toast(LANG==='ar'?'لا مواد في المدى':'Nothing to pick up in this range'); return; }
+  startNewReport();          // reset, shows scr-kind
+  chooseKind('wh');          // warehouse mode -> scr-a
+  draft.whMovement=[];
+  Object.keys(agg.prod).forEach(k=>{ const kk=k.split('|'); draft.whMovement.push({dir:'Taken', type:'Supplies', name:kk[0], qty:Math.round(agg.prod[k]*10)/10, unit:kk[1]}); });
+  Object.keys(agg.eq).forEach(n=>{ draft.whMovement.push({dir:'Taken', type:'Equipment', name:n, qty:agg.eq[n], unit:'each'}); });
+  renderWhMove();
+  toast(LANG==='ar'?'حمولة مُعبّأة كـ«مسحوب» — عدّلها حسب الصرف الفعلي':'Load pre-filled as Taken — adjust to the real signed counts');
+}
+/* ---- sample WEEK (demo of the multi-day features until CSS emits bundles) ---- */
+function loadSampleWeek(){
+  const base=decodePlanFromString(SAMPLE_PLAN_B64);   // real Aug-1 day
+  if(!base){ toast('Sample decode failed'); return; }
+  const bundle={ proCode:'Pro001', generatedAt:new Date().toISOString(), scheduleFrom:'2026-08-01', scheduleTo:'2026-08-03',
+    days:[
+      { planDate:'2026-08-01', visits:base.visits, dayLoad:base.dayLoad },
+      { planDate:'2026-08-02',
+        visits:[{seq:1,scheduleId:'OBL-01002',customerNo:'021-TEST-021/03',customerName:'O Restaurants — Maadi',visitType:'Contractual',window:'00:30',pests:{Cockroaches:['Space baiting']},budget:{products:[{product:'Test Gel 30g tube',qty:2,unit:'tube'}],techs:1,minutes:45}}],
+        dayLoad:{products:[{name:'Test Gel 30g tube',qty:2,unit:'tube'}],equipment:[],techsMax:1} },
+      { planDate:'2026-08-03',
+        visits:[{seq:1,scheduleId:'OBL-01003',customerNo:'003-TEST-003',customerName:'Test Hotel C',visitType:'Call-out',window:'14:00',pests:{Rodents:['Above ground']},budget:{products:[{product:'Test Paste C',qty:2,unit:'each'}],equipment:[{name:'Test Ladder E',qty:1,unit:'each'}],techs:1,minutes:45}}],
+        dayLoad:{products:[{name:'Test Paste C',qty:2,unit:'each'}],equipment:[{name:'Test Ladder E',qty:1,unit:'each'}],techsMax:1} }
+    ]};
+  localStorage.setItem('pt_now','2026-08-01T10:00');   // sample dates are in the past — test mode (§7)
+  ingestBundle(bundle);
+  toast('🧪 '+(LANG==='ar'?'أسبوع نموذجي (3 أيام، وضع اختبار)':'Sample week loaded — 3 days, test mode'));
+  renderHome();
+}
+
+/* ================= INIT ================= */
+(function init(){
+  // dropdowns
+  $('cProd').innerHTML='<option value="">'+t('— Select —')+'</option>'+PRODUCTS.map(p=>`<option value="${p.name}">${dispName(p.name)}</option>`).join('');
+  buildTechSelect();
+  renderPestChecks();
+  $('fWhSelect').innerHTML=WAREHOUSES.map((w,i)=>`<option value="${i}">${w.name} — ${w.gov}</option>`).join('');
+  buildVocabSelects();
+  $('homeCar').innerHTML=CARS.map(c=>`<option value="${c.id}">${c.label}</option>`).join('')+'<option value="PUBLIC">🚌 Public transport / No car</option>';
+  applyLang();
+  processPlanHash();   // PHASE 3B — read #plan= link on open, store locally, strip the hash (§3)
+  // restore session
+  const s=load('pt_session',null);
+  if(s){ session=s; purgeOldReports().then(()=>{ renderHome(); }); show('scr-home'); }
+})();
+</script>
+</body>
+</html>
