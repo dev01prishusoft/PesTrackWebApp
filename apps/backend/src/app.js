@@ -54,45 +54,43 @@ const publicDir = path.join(__dirname, '..', 'public');
 // (Pro001 / CS001). They must NEVER fall through to the React SPA catch-all
 // below, which renders the admin app and bounces the visitor to /admin/login.
 //
-// Stable aliases required by the brief:
-//   /svr  ->  SVR (Site Visit Report, field engineers, phone)
-//   /css  ->  CS Scheduler (customer service agent, desktop)
+// Routes come from the filesystem, so there is no list to maintain: every
+// public/<name>.html is served at /<name>.html. Drop a file in, redeploy, done.
 //
-// The CS Scheduler builds WhatsApp deep links as `<PesTrack URL>` + `/#plan=…`
-// (see planLink/bundleLink in PesTrackCSSchedulerv0.16.html), so the SVR alias
-// must answer both `/svr` and `/svr/`. Set the "PesTrack URL" field on the CS
-// Daily List tab to `https://<site>/svr` — that is the whole of brief Task 2.
+// The URLs are the file names, unchanged:
+//   /PesTrackv4.5.1.html            -> SVR
+//   /PesTrackCSSchedulerv0.16.html  -> CS Scheduler
+//
+// express.static below would already answer those two exact strings; this
+// middleware exists for the variants it would miss. The CS Scheduler builds its
+// WhatsApp deep links as `<PesTrack URL>` + `/#plan=…` (see planLink/bundleLink
+// in the CS Scheduler source), so a configured PesTrack URL of
+// `https://<site>/PesTrackv4.5.1.html` produces a request path with a TRAILING
+// SLASH — `/PesTrackv4.5.1.html/` — which express.static does not serve and the
+// SPA catch-all would swallow. Every plan link sent to a Pro depends on this.
 // ---------------------------------------------------------------------------
-const STANDALONE_ALIASES = {
-  svr: 'PesTrackv4.5.1.html',
-  css: 'PesTrackCSSchedulerv0.16.html',
-};
 
-// Scan public/ once at boot instead of on every request (readdirSync per request
-// is a synchronous disk hit on the hot path). Keyed by lowercased basename so
-// URLs are case-insensitive — Render runs a case-sensitive filesystem, and the
-// links are retyped by hand off a phone.
+// Scanned once at boot, not per request (readdirSync on the hot path is a
+// synchronous disk hit). Keys are lowercased so URLs are case-insensitive:
+// Render's filesystem is case-sensitive and these links get retyped off phones.
 const standalonePages = new Map();
 try {
-  for (const file of fs.readdirSync(publicDir)) {
-    if (!file.endsWith('.html') || file === 'index.html') continue;
-    standalonePages.set(file.toLowerCase().replace(/\.html$/, ''), file);
+  for (const entry of fs.readdirSync(publicDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.html') || entry.name === 'index.html') continue;
+    standalonePages.set(entry.name.toLowerCase().replace(/\.html$/, ''), entry.name);
   }
 } catch (err) {
-  console.warn('[static-html] Could not scan public/ for HTML files:', err.message);
+  console.warn('[static-html] could not scan public/:', err.message);
 }
-for (const [alias, file] of Object.entries(STANDALONE_ALIASES)) {
-  if (fs.existsSync(path.join(publicDir, file))) standalonePages.set(alias, file);
-  else console.warn(`[static-html] alias /${alias} -> ${file} missing from public/`);
-}
-console.log(`[static-html] serving: ${[...standalonePages.keys()].map(k => '/' + k).join(', ')}`);
+
+console.log(`[static-html] serving: ${[...standalonePages.values()].map(f => '/' + f).join(', ')}`);
 
 // Mounted BEFORE express.static and before the SPA catch-all.
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (req.path.startsWith('/api')) return next();
 
-  // Accept /svr, /svr/, /PesTrackv4.5.1.html, /pestrackv4.5.1 — all the same page.
+  // Accept /PesTrackv4.5.1.html, /PesTrackv4.5.1.html/, /pestrackv4.5.1 alike.
   let key;
   try {
     key = decodeURIComponent(req.path); // throws on a malformed % escape

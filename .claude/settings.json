@@ -7,7 +7,8 @@
       "Bash(cp /private/tmp/claude-501/-Users-apple-Projects-PesTrackWebApp/a5daee75-99db-4cc2-b1ea-717b70d3e0c1/scratchpad/t.js ./_t.js)",
       "Bash(node ./_t.js)",
       "Bash(timeout 120 npx jest --runInBand)",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(curl -s \"https://pestrack-backend.onrender.com/PesTrackv4.5.1.html\")"
     ],
     "additionalDirectories": [
       "/Users/apple/Projects/PesTrackWebApp/apps/backend"
