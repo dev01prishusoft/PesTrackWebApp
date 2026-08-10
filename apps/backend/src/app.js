@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -49,15 +50,25 @@ app.use('/api/audit', auditRoutes);
 // for /admin/* routes — React Router in the main SPA handles all routing.
 app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 
-// Explicit routes for standalone HTML apps (POC static files).
-// These must be pinned BEFORE the SPA catch-all below, which would otherwise
-// intercept any path (including *.html) and silently return index.html.
-app.get('/PesTrackv4.5.1.html', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'PesTrackv4.5.1.html'));
-});
-app.get('/PesTrackCSSchedulerv0.16.html', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'PesTrackCSSchedulerv0.16.html'));
-});
+// Dynamic standalone-HTML router.
+// Scans public/ at startup for *.html files (excluding index.html which belongs
+// to the React SPA). Any file found gets a pinned GET route so it is served
+// directly — BEFORE the SPA catch-all below, which would otherwise intercept
+// every path and silently return index.html.
+// Drop a new .html file into public/ and redeploy; no code change needed.
+const publicDir = path.join(__dirname, '..', 'public');
+try {
+  fs.readdirSync(publicDir)
+    .filter(f => f.endsWith('.html') && f !== 'index.html')
+    .forEach(file => {
+      const route = `/${file}`;
+      const filePath = path.join(publicDir, file);
+      app.get(route, (_req, res) => res.sendFile(filePath));
+      console.log(`[static-html] registered route: ${route}`);
+    });
+} catch (err) {
+  console.warn('[static-html] Could not scan public/ for HTML files:', err.message);
+}
 
 // SPA fallback: ALL non-API GET requests are handled by the main React SPA so
 // client-side routes (including /admin/login, /admin/users, etc.) resolve
