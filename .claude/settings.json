@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"/private/tmp/claude-501/-Users-apple-Projects-PesTrackWebApp/a5daee75-99db-4cc2-b1ea-717b70d3e0c1/scratchpad/docx\")",
+      "Bash(unzip -o -q \"POC Deploy Brief - Prishusoft.docx\" -d \"/private/tmp/claude-501/-Users-apple-Projects-PesTrackWebApp/a5daee75-99db-4cc2-b1ea-717b70d3e0c1/scratchpad/docx\")",
+      "Bash(python3 -c ' *)",
+      "Bash(cp /private/tmp/claude-501/-Users-apple-Projects-PesTrackWebApp/a5daee75-99db-4cc2-b1ea-717b70d3e0c1/scratchpad/t.js ./_t.js)",
+      "Bash(node ./_t.js)",
+      "Bash(timeout 120 npx jest --runInBand)",
+      "Bash(npx jest *)"
+    ],
+    "additionalDirectories": [
+      "/Users/apple/Projects/PesTrackWebApp/apps/backend"
+    ]
+  }
+}
