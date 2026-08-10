@@ -49,6 +49,16 @@ app.use('/api/audit', auditRoutes);
 // for /admin/* routes — React Router in the main SPA handles all routing.
 app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 
+// Explicit routes for standalone HTML apps (POC static files).
+// These must be pinned BEFORE the SPA catch-all below, which would otherwise
+// intercept any path (including *.html) and silently return index.html.
+app.get('/PesTrackv4.5.1.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'PesTrackv4.5.1.html'));
+});
+app.get('/PesTrackCSSchedulerv0.16.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'PesTrackCSSchedulerv0.16.html'));
+});
+
 // SPA fallback: ALL non-API GET requests are handled by the main React SPA so
 // client-side routes (including /admin/login, /admin/users, etc.) resolve
 // correctly and the redirect-when-logged-in logic runs.
