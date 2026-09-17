@@ -24,7 +24,12 @@ if (process.env.TRUST_PROXY) {
 }
 
 // Security + parsing. CSP disabled so the existing CDN-based HTML dashboard works.
-app.use(helmet({ contentSecurityPolicy: false }));
+// Helmet 7 defaults to Referrer-Policy: no-referrer, which strips Referer and
+// makes referrer-restricted ArcGIS tile keys return 401 on production.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
 app.use(cors({ origin: process.env.FRONTEND_URL || true, credentials: true }));
 app.use(express.json({ limit: '15mb' })); // large limit for JSON import at go-live
 
@@ -48,7 +53,6 @@ app.use('/api/audit', auditRoutes);
 // index auto-serving so Express never silently serves public/admin/index.html
 // for /admin/* routes — React Router in the main SPA handles all routing.
 app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
-
 
 // SPA fallback: ALL non-API GET requests are handled by the main React SPA so
 // client-side routes (including /admin/login, /admin/users, etc.) resolve
