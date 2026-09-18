@@ -14,7 +14,7 @@ const LOC_ID =
 // siteId arrives in the query string (GET/DELETE) or the body (POST/PUT).
 const siteFromReq = (req) => req.query.siteId || req.body.siteId;
 const siteAccess = requireSiteAccess(siteFromReq);
-const canWrite = requireRole('admin', 'engineer'); // client_viewer is read-only
+const canWrite = requireRole('admin', 'site_manager', 'engineer'); // client_viewer is read-only
 const requireAdmin = requireRole('admin');
 
 // Require a siteId on every request so scoping is unambiguous.

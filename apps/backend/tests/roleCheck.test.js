@@ -66,4 +66,17 @@ describe('requireSiteAccess', () => {
     requireSiteAccess(get)({ user: { role: 'client_viewer', siteIds: [1, 2] }, params: { siteId: 2 } }, res, () => (nextCalled = true));
     expect(nextCalled).toBe(true);
   });
+
+  test('403 when site_manager not assigned to site', () => {
+    const res = mockRes(); let nextCalled = false;
+    requireSiteAccess(get)({ user: { role: 'site_manager', siteIds: [1] }, params: { siteId: 2 } }, res, () => (nextCalled = true));
+    expect(res.statusCode).toBe(403);
+    expect(nextCalled).toBe(false);
+  });
+
+  test('calls next when site_manager assigned to site', () => {
+    const res = mockRes(); let nextCalled = false;
+    requireSiteAccess(get)({ user: { role: 'site_manager', siteIds: [1, 2] }, params: { siteId: 2 } }, res, () => (nextCalled = true));
+    expect(nextCalled).toBe(true);
+  });
 });

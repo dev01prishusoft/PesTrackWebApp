@@ -7,7 +7,7 @@ const {
   minLen, maxLen, oneOf, noSpaces, isEmail,
 } = require('../utils/validate');
 
-const VALID_ROLES = ['admin', 'engineer', 'client_viewer'];
+const VALID_ROLES = ['admin', 'site_manager', 'engineer', 'client_viewer'];
 const MIN_ACTIVE_ADMINS = 2;
 const ADMIN_DEACTIVATION_ERROR =
   'At least 2 active admins are required. Promote another user to admin before deactivating this account.';

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -549,6 +549,10 @@ window.locateMe = locateMe;
 
 // ── Export findings as JSON file (photos compressed for sharing) ──
 async function exportFindings(){
+  if (currentUser && currentUser.role !== 'admin') {
+    showNotif('⚠️ Only administrators can export JSON data', true, 3000);
+    return;
+  }
   if(!window._ptFindings || window._ptFindings.length === 0){
     showNotif('⚠️ No findings to export yet', true, 3000);
     return;
@@ -625,6 +629,10 @@ window.exportFindings = exportFindings;
 
 // ── Import findings from JSON file ───────────────────────────────
 function triggerImport(){
+  if (currentUser && currentUser.role !== 'admin') {
+    showNotif('⚠️ Only administrators can import JSON data', true, 3000);
+    return;
+  }
   document.getElementById('import-json-input').value='';
   document.getElementById('import-json-input').click();
 }
@@ -1438,6 +1446,10 @@ function requireSite(){
 // Open the parcel-XLSX picker, but only if a site is selected (so the user gets
 // the "no site" message before the file dialog appears).
 function triggerParcelUpload(){
+  if (currentUser && currentUser.role !== 'admin') {
+    showNotif('⚠️ Only administrators can update parcels', true, 3000);
+    return;
+  }
   if (requireSite()) return;
   document.getElementById('parcel-xlsx-input').click();
 }
@@ -2496,7 +2508,7 @@ async function renderAllFindings(){
 // it (creator doesn't matter). Client viewers are read-only.
 function canModifyItem(){
   if(!currentUser) return false;
-  return currentUser.role === 'admin' || currentUser.role === 'engineer';
+  return currentUser.role === 'admin' || currentUser.role === 'engineer' || currentUser.role === 'site_manager';
 }
 
 function buildPopup(loc){
@@ -2506,7 +2518,7 @@ function buildPopup(loc){
   const _photoPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
   const canAddVisit = canModifyItem();
-  const canPrintFinding = currentUser && (currentUser.role === 'admin' || currentUser.role === 'client_viewer');
+  const canPrintFinding = currentUser && (currentUser.role === 'admin' || currentUser.role === 'site_manager' || currentUser.role === 'client_viewer');
 
   let timelineHTML = loc.visits.map(v => {
     const photos = v.photos || [];
@@ -3104,9 +3116,10 @@ function applyPermissions(role) {
   // Header profile menu: shows who's signed in and their role (so a client
   // viewer understands why edit controls are hidden) plus the logout action.
   const ROLE_META = {
-    admin:         { label: 'Admin',  color: '#7C3AED' },
-    engineer:      { label: 'Engineer', color: '#0F766E' },
-    client_viewer: { label: 'Viewer', color: '#64748B' },
+    admin:         { label: 'Admin',        color: '#7C3AED' },
+    site_manager:  { label: 'Site Manager', color: '#D97706' },
+    engineer:      { label: 'Engineer',     color: '#0F766E' },
+    client_viewer: { label: 'Viewer',       color: '#64748B' },
   };
   const menuWrap = document.getElementById('user-menu-wrap');
   if (menuWrap) {
@@ -3133,8 +3146,8 @@ function applyPermissions(role) {
     if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
     if (btnPdf) btnPdf.style.display = '';
     if (btnRecap) btnRecap.style.display = '';
-    if (btnActivity) btnActivity.style.display = '';
-    if (btnOverdue) btnOverdue.style.display = '';
+    if (btnActivity) btnActivity.style.display = 'none';
+    if (btnOverdue) btnOverdue.style.display = 'none';
   } else if (role === 'engineer') {
     if (btnFi) btnFi.style.display = '';
     if (btnCz) btnCz.style.display = 'none';
@@ -3145,6 +3158,16 @@ function applyPermissions(role) {
     if (btnRecap) btnRecap.style.display = 'none';
     if (btnActivity) btnActivity.style.display = 'none';
     if (btnOverdue) btnOverdue.style.display = 'none';
+  } else if (role === 'site_manager') {
+    if (btnFi) btnFi.style.display = '';
+    if (btnCz) btnCz.style.display = 'none';
+    if (btnExport) btnExport.style.display = 'none';
+    if (btnImport) btnImport.style.display = 'none';
+    if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
+    if (btnPdf) btnPdf.style.display = '';
+    if (btnRecap) btnRecap.style.display = '';
+    if (btnActivity) btnActivity.style.display = '';
+    if (btnOverdue) btnOverdue.style.display = '';
   } else if (role === 'admin') {
     if (btnFi) btnFi.style.display = '';
     if (btnCz) btnCz.style.display = '';

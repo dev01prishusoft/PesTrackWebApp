@@ -97,6 +97,7 @@ export function UsersPage() {
           >
             <option value="">All roles</option>
             <option value="admin">Admin</option>
+            <option value="site_manager">Site Manager</option>
             <option value="engineer">Engineer</option>
             <option value="client_viewer">Client Viewer</option>
           </select>
