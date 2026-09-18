@@ -50,9 +50,9 @@ const STATUSES = [
 ];
 
 const ESCALATIONS = [
-  ['Not assigned', 0], ['SOTAICO', 1], ['Client QA', 2], ['Client FM', 3],
+  ['Not assigned', 0], ['SOTAICO', 1], ['Client Super', 2], ['Client FM', 3],
   ['Client Subcontractor RS', 4], ['Client Subcontractor OC', 5],
-  ['Client Subcontractor Other', 6], ['Client Senior Management', 7], ['Other', 8],
+  ['Client Subcontractor Other', 6], ['Client Other', 7], ['Client Senior Management', 8], ['Other', 9],
 ];
 
 async function seed() {

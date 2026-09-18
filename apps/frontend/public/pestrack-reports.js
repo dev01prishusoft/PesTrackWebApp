@@ -949,7 +949,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     }
 
     const CAT_ORDER = (window._CATS||[]).map(c=>c.id);
-    const ESCALATED_ORDER = ['SOTAICO','Client QA','Client FM','Client Subcontractor RS','Client Subcontractor OC','Client Subcontractor Other','Client Senior Management','Other',''];
+    const ESCALATED_ORDER = ['SOTAICO','Client Super','Client FM','Client Subcontractor RS','Client Subcontractor OC','Client Subcontractor Other','Client Other','Client Senior Management','Other',''];
 
     function lastEscalated(loc){
       for(const v of loc.visits){ if(v.escalated) return v.escalated; }
@@ -1464,7 +1464,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
       // ── 4) By Assigned / Escalated To ──────────────────────────
       sectionTitle('Totals by Assigned / Escalated To');
       {
-        const escOrder = ['SOTAICO','Client QA','Client FM','Client Subcontractor RS','Client Subcontractor OC','Client Subcontractor Other','Client Senior Management','Other'];
+        const escOrder = ['SOTAICO','Client Super','Client FM','Client Subcontractor RS','Client Subcontractor OC','Client Subcontractor Other','Client Other','Client Senior Management','Other'];
         const counts = {};
         let unassigned = 0;
         recap.forEach(r=>{

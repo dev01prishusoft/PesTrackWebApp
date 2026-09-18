@@ -1339,6 +1339,188 @@ function buildParcelSelect(){
 }
 window.buildParcelSelect = buildParcelSelect;
 
+// ── Finding Modal Language & RTL Support (Quote C1) ─────────────────
+let currentFiLang = localStorage.getItem('pt_fi_lang') || 'en';
+
+const FI_I18N = {
+  en: {
+    toggleBtn: 'عربي',
+    titleNew: '🔍 Site Finding',
+    titleEdit: '✏️ Edit Finding',
+    lblCat: 'Category',
+    lblStat: 'Status',
+    lblShort: 'Label (short)',
+    phShort: 'e.g. Blocked drain NE corner…',
+    lblDate: 'Date of inspection',
+    lblNotes: 'Observations, Recommendations & Action',
+    phNotes: 'Describe the finding, recommended corrective action, and any action taken or assigned…',
+    lblEsc: 'Assigned / Escalated to <span style="font-weight:400;color:#94A3B8">(optional)</span>',
+    optEscNone: '— Not assigned —',
+    lblParcel: 'Parcel / Area',
+    lblCoords: 'GPS Coordinates <span style="font-weight:400;color:#94A3B8">(optional)</span>',
+    textCaptureGPS: 'Capture GPS',
+    lblPhotos: 'Photos',
+    btnAddPhotos: '📷 Add Photos',
+    btnCancel: 'Cancel',
+    btnSave: 'Save Finding',
+    statuses: {
+      open: '🟠 1st Offense',
+      repeat: '🔴 Repeat',
+      resolved: '🟢 Resolved'
+    },
+    categories: {
+      'stp_trench': 'STP / Trenches',
+      'organic': 'Exposed Waste',
+      'structural': 'Dysfunctional Swim Pool',
+      'housekeeping': 'Standing water - Other',
+      'irrigation': 'Landscape/Irrigation',
+      'debris': 'Construction Debris',
+      'mep': 'Drains & Manholes',
+      'other': 'Other'
+    },
+    escalations: {
+      'Not assigned': '— Not assigned —',
+      'SOTAICO': 'SOTAICO',
+      'SOTAICOs': 'SOTAICO',
+      'Client Super': 'Client Super',
+      'Client FM': 'Client FM',
+      'Client Subcontractor RS': 'Client Subcontractor RS',
+      'Client Subcontractor OC': 'Client Subcontractor OC',
+      'Client Subcontractor Other': 'Client Subcontractor Other',
+      'Client Other': 'Client Other',
+      'Client Senior Management': 'Client Senior Management',
+      'Other': 'Other'
+    }
+  },
+  ar: {
+    toggleBtn: 'English',
+    titleNew: '🔍 تسجيل رصد ميداني',
+    titleEdit: '✏️ تعديل الرصد',
+    lblCat: 'الفئة / المصدر',
+    lblStat: 'الحالة',
+    lblShort: 'عنوان موجز',
+    phShort: 'مثال: مصرف مسدود الزاوية الشمالية...',
+    lblDate: 'تاريخ الفحص',
+    lblNotes: 'الملاحظات والتوصيات والإجراءات',
+    phNotes: 'صف الملاحظة والإجراء التصحيحي الموصى به وأي إجراء تم اتخاذه أو تكليفه...',
+    lblEsc: 'مُسند إلى <span style="font-weight:400;color:#94A3B8">(اختياري)</span>',
+    optEscNone: '— غير محدد —',
+    lblParcel: 'القطعة / المنطقة',
+    lblCoords: 'إحداثيات الموقع GPS <span style="font-weight:400;color:#94A3B8">(اختياري)</span>',
+    textCaptureGPS: 'تحديد الموقع الحالي',
+    lblPhotos: 'الصور',
+    btnAddPhotos: '📷 إضافة صور',
+    btnCancel: 'إلغاء',
+    btnSave: 'حفظ الفحص',
+    statuses: {
+      open: '🟠 مخالفة أولى',
+      repeat: '🔴 تكرار',
+      resolved: '🟢 تم الحل'
+    },
+    categories: {
+      'stp_trench': 'محطة معالجة الصرف / خنادق',
+      'organic': 'نفايات مكشوفة',
+      'structural': 'مسبح معطل',
+      'housekeeping': 'مياه راكدة - أخرى',
+      'irrigation': 'مسطحات خضراء / ري',
+      'debris': 'مخلفات بناء',
+      'mep': 'مصارف وبالوعات',
+      'other': 'أخرى'
+    },
+    escalations: {
+      'Not assigned': '— غير محدد —',
+      'SOTAICO': 'سوتيكو (SOTAICO)',
+      'SOTAICOs': 'سوتيكو (SOTAICO)',
+      'Client Super': 'مشرف العميل (Client Super)',
+      'Client FM': 'إدارة المرافق (Client FM)',
+      'Client Subcontractor RS': 'مقاول الباطن RS',
+      'Client Subcontractor OC': 'مقاول الباطن OC',
+      'Client Subcontractor Other': 'مقاول باطن آخر',
+      'Client Other': 'جهة أخرى لدى العميل (Client Other)',
+      'Client Senior Management': 'الإدارة العليا للعميل',
+      'Other': 'أخرى'
+    }
+  }
+};
+
+function toggleFiLang(){
+  const nextLang = currentFiLang === 'ar' ? 'en' : 'ar';
+  applyFiLang(nextLang);
+}
+window.toggleFiLang = toggleFiLang;
+
+function applyFiLang(lang){
+  currentFiLang = lang;
+  localStorage.setItem('pt_fi_lang', lang);
+  const dict = FI_I18N[lang] || FI_I18N.en;
+  const isAr = lang === 'ar';
+
+  const modalBox = document.getElementById('fi-modal-box');
+  if(modalBox){
+    modalBox.setAttribute('dir', isAr ? 'rtl' : 'ltr');
+    modalBox.style.textAlign = isAr ? 'right' : 'left';
+  }
+
+  const langText = document.getElementById('fi-lang-text');
+  if(langText) langText.textContent = dict.toggleBtn;
+
+  const titleEl = document.getElementById('fi-modal-title');
+  if(titleEl){
+    titleEl.textContent = editingVisitId ? dict.titleEdit : dict.titleNew;
+  }
+
+  const setHtml = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
+  const setText = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  const setPh = (id, ph) => { const el = document.getElementById(id); if(el) el.placeholder = ph; };
+
+  setHtml('fi-lbl-cat', dict.lblCat);
+  setHtml('fi-lbl-stat', dict.lblStat);
+  setHtml('fi-lbl-short', dict.lblShort);
+  setPh('fi-lbl', dict.phShort);
+  setHtml('fi-lbl-date', dict.lblDate);
+  setHtml('fi-lbl-notes', dict.lblNotes);
+  setPh('fi-notes', dict.phNotes);
+  setHtml('fi-lbl-esc', dict.lblEsc);
+  setHtml('fi-lbl-parcel', dict.lblParcel);
+  setHtml('fi-lbl-coords', dict.lblCoords);
+  setText('fi-text-capture-gps', dict.textCaptureGPS);
+  setHtml('fi-lbl-photos', dict.lblPhotos);
+  setText('btn-add-photos', dict.btnAddPhotos);
+  setText('btn-fi-cancel', dict.btnCancel);
+  setText('btn-fi-save', dict.btnSave);
+
+  // Status buttons
+  ['open','repeat','resolved'].forEach(st => {
+    const btn = document.getElementById('sb-' + st);
+    if(btn && dict.statuses[st]){
+      btn.textContent = dict.statuses[st];
+    }
+  });
+
+  // Category buttons
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    const cid = b.dataset.id;
+    if(cid && dict.categories[cid]){
+      b.textContent = dict.categories[cid];
+    }
+  });
+
+  // Align inputs
+  ['fi-lbl','fi-notes','fi-coords','fi-date','fi-parcel'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){
+      el.style.textAlign = isAr ? 'right' : 'left';
+      if(id === 'fi-lbl' || id === 'fi-notes') el.setAttribute('dir', isAr ? 'rtl' : 'ltr');
+    }
+  });
+
+  const gpsRow = document.getElementById('fi-gps-row');
+  if(gpsRow) gpsRow.style.justifyContent = isAr ? 'flex-start' : 'flex-end';
+
+  buildEscalationSelect();
+}
+window.applyFiLang = applyFiLang;
+
 // ── Modal injection ────────────────────────────────────────────────
 function injectModals(){
   // Photo lightbox
@@ -1353,51 +1535,57 @@ function injectModals(){
   modal.id = 'm-fi';
   modal.style.display = 'none';
   modal.innerHTML = `
-    <div class="mod" style="max-width:420px;max-height:90vh;overflow-y:auto">
-      <h3>🔍 Site Finding</h3>
-      <label style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Category</label>
+    <div class="mod" id="fi-modal-box" style="max-width:420px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;">
+        <h3 id="fi-modal-title" style="margin:0;font-size:1.1rem;font-weight:700;">🔍 Site Finding</h3>
+        <button type="button" id="fi-lang-toggle" onclick="toggleFiLang()" style="padding:4px 10px;border-radius:6px;border:1.5px solid #CBD5E1;background:#F8FAFC;font-size:0.75rem;font-weight:700;cursor:pointer;color:#0F766E;display:flex;align-items:center;gap:5px;flex-shrink:0;">
+          <span id="fi-lang-flag">🌐</span> <span id="fi-lang-text">عربي</span>
+        </button>
+      </div>
+      <label id="fi-lbl-cat" style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Category</label>
       <div class="cat-grid" id="fi-cat-grid"></div>
-      <label style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Status</label>
+      <label id="fi-lbl-stat" style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Status</label>
       <div class="status-row">
         <button class="stat-btn open sel" id="sb-open"     onclick="setFiStat('open',this)">🟠 1st Offense</button>
         <button class="stat-btn repeat"   id="sb-repeat"   onclick="setFiStat('repeat',this)">🔴 Repeat</button>
         <button class="stat-btn resolved" id="sb-resolved" onclick="setFiStat('resolved',this)">🟢 Resolved</button>
       </div>
-      <label>Label (short)</label>
+      <label id="fi-lbl-short">Label (short)</label>
       <input id="fi-lbl" maxlength="255" placeholder="e.g. Blocked drain NE corner…">
-      <label>Date of inspection</label>
+      <label id="fi-lbl-date">Date of inspection</label>
       <input id="fi-date" type="date">
-      <label>Observations, Recommendations & Action</label>
+      <label id="fi-lbl-notes">Observations, Recommendations & Action</label>
       <textarea id="fi-notes" rows="3" placeholder="Describe the finding, recommended corrective action, and any action taken or assigned…"></textarea>
-      <label>Assigned / Escalated to <span style="font-weight:400;color:#94A3B8">(optional)</span></label>
+      <label id="fi-lbl-esc">Assigned / Escalated to <span style="font-weight:400;color:#94A3B8">(optional)</span></label>
       <select id="fi-escalated" style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid #D0D5DD;font-size:0.9rem;font-family:inherit">
         <option value="">— Not assigned —</option>
         <option value="SOTAICO">SOTAICO</option>
-        <option value="Client QA">Client QA</option>
+        <option value="Client Super">Client Super</option>
         <option value="Client FM">Client FM</option>
         <option value="Client Subcontractor RS">Client Subcontractor RS</option>
         <option value="Client Subcontractor OC">Client Subcontractor OC</option>
         <option value="Client Subcontractor Other">Client Subcontractor Other</option>
+        <option value="Client Other">Client Other</option>
         <option value="Client Senior Management">Client Senior Management</option>
         <option value="Other">Other</option>
       </select>
-      <label>Parcel / Area</label>
+      <label id="fi-lbl-parcel">Parcel / Area</label>
       <select id="fi-parcel" style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid #D0D5DD;font-size:0.9rem;font-family:inherit"></select>
-      <label>GPS Coordinates <span style="font-weight:400;color:#94A3B8">(optional)</span></label>
+      <label id="fi-lbl-coords">GPS Coordinates <span style="font-weight:400;color:#94A3B8">(optional)</span></label>
       <input id="fi-coords" placeholder="e.g. 29.9612, 30.9874" autocomplete="off" style="font-family:monospace;margin-bottom:4px;">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <div id="fi-gps-row" style="display:flex;justify-content:flex-end;margin-bottom:10px;">
         <button id="btn-capture-gps" type="button" onclick="captureGPS()" title="Get Current Location" style="background:none;border:none;color:#0F766E;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.8rem;padding:2px 4px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-          Capture GPS
+          <span id="fi-text-capture-gps">Capture GPS</span>
         </button>
       </div>
-      <label>Photos</label>
+      <label id="fi-lbl-photos">Photos</label>
       <input type="file" id="fi-photo-in" multiple accept="image/*" style="display:none" onchange="handleFiPhotos(this)">
-      <button class="sbbtn s" onclick="document.getElementById('fi-photo-in').click()" style="margin:0 0 5px">📷 Add Photos</button>
+      <button id="btn-add-photos" class="sbbtn s" onclick="document.getElementById('fi-photo-in').click()" style="margin:0 0 5px">📷 Add Photos</button>
       <div id="fi-photo-preview"></div>
       <div class="mbtns" style="margin-top:10px">
-        <button class="bcancel" onclick="closeFiModal()">Cancel</button>
-        <button class="bok" onclick="saveFinding()">Save Finding</button>
+        <button id="btn-fi-cancel" class="bcancel" onclick="closeFiModal()">Cancel</button>
+        <button id="btn-fi-save" class="bok" onclick="saveFinding()">Save Finding</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -1430,6 +1618,9 @@ function injectModals(){
 
   // Set today's date as default
   document.getElementById('fi-date').value = new Date().toISOString().slice(0,10);
+
+  // Apply saved language preference
+  applyFiLang(currentFiLang);
 }
 
 // ── Tool activation ────────────────────────────────────────────────
@@ -1629,6 +1820,7 @@ function onFindingsMapClick(e){
   const defCat = (CATS.find(c=>c.id==='stp_trench') || CATS[0] || {id:'stp_trench'}).id;
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('sel', b.dataset.id === defCat));
   selectedCat = defCat;
+  applyFiLang(currentFiLang);
   document.getElementById('m-fi').style.display = 'flex';
 }
 
@@ -1673,7 +1865,7 @@ function addVisitToLocation(locId){
   const lastCat = loc && loc.visits[0] ? loc.visits[0].cat : 'stp_trench';
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('sel', b.dataset.id === lastCat));
   selectedCat = lastCat;
-  const _h3=document.querySelector('#m-fi .mod h3'); if(_h3) _h3.textContent = '🔍 Site Finding';
+  applyFiLang(currentFiLang);
   document.getElementById('m-fi').style.display = 'flex';
   map.closePopup();
 }
@@ -1759,7 +1951,7 @@ function openEditVisitDialog(loc, visit){
   setFiStat(visit.status||'open', document.getElementById('sb-'+(visit.status||'open')));
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('sel', b.dataset.id===(visit.cat||'stp_trench')));
   selectedCat = visit.cat || 'stp_trench';
-  const _h3=document.querySelector('#m-fi .mod h3'); if(_h3) _h3.textContent = '✏️ Edit Finding';
+  applyFiLang(currentFiLang);
   document.getElementById('m-fi').style.display = 'flex';
   map.closePopup();
 }
@@ -3221,14 +3413,15 @@ function buildEscalationSelect() {
   select.innerHTML = '';
   const blank = document.createElement('option');
   blank.value = '';
-  blank.textContent = '— Not assigned —';
+  const isAr = typeof currentFiLang !== 'undefined' && currentFiLang === 'ar';
+  blank.textContent = isAr ? '— غير محدد —' : '— Not assigned —';
   select.appendChild(blank);
   
   Object.keys(escalationLabelToId).forEach(lbl => {
     if (lbl === 'Not assigned') return;
     const opt = document.createElement('option');
     opt.value = lbl;
-    opt.textContent = lbl;
+    opt.textContent = isAr && FI_I18N.ar.escalations[lbl] ? FI_I18N.ar.escalations[lbl] : lbl;
     select.appendChild(opt);
   });
   if (currentVal) select.value = currentVal;
