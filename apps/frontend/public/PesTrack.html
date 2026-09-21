@@ -127,6 +127,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   #profile-btn { display: flex !important; position: absolute; left: 20px; top: 22px; pointer-events: none; z-index: 10; }
   #user-menu > div:first-child { order: -1; padding-left: 52px !important; border-bottom: 1px solid #E2E8F0 !important; padding-bottom: 18px !important; padding-top: 4px !important; margin-bottom: 5px; width: 100%; text-align: left; }
   #user-menu > button { order: 999; margin-top: auto; border-top: 1px solid #E2E8F0 !important; padding-top: 18px !important; width: 100%; border-radius: 0; color: #EF4444 !important; font-size: 0.9rem !important; }
+  #reports-menu-wrap { width: 100% !important; order: 1; }
+  #btn-reports-menu { width: 100% !important; justify-content: space-between !important; padding: 10px 14px !important; border-radius: 8px !important; }
+  #reports-dropdown { position: static !important; width: 100% !important; box-shadow: none !important; border: 1px solid #E2E8F0 !important; margin-top: 6px !important; }
+}
+
+/* Reports dropdown styling */
+.report-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #1E293B;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: inherit;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.report-menu-item:hover {
+  background: #F1F5F9 !important;
 }
 
 /* Report modal label formatting (Quote A) */
@@ -265,10 +290,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="hbtn" id="btn-only-constr" onclick="toggleOnlyConstr()" title="Show only construction zones — hide findings">👁 Only Constr.</button>
     <button class="hbtn blue" id="btn-export" style="display:none" onclick="exportFindings()" title="Export all findings with photos — use this to back up and share">📤 Export JSON</button>
     <button class="hbtn blue" id="btn-import" style="display:none" onclick="triggerImport()" title="Import findings from a previously exported JSON">📥 Import JSON</button>
-    <button class="hbtn" id="btn-pdf" style="display:none;background:#7C3AED;color:#fff;border-color:#7C3AED" onclick="openPdfSortModal()" title="Export findings report as PDF">📋 PDF Report</button>
-    <button class="hbtn" id="btn-recap" style="display:none;background:#4F46E5;color:#fff;border-color:#4F46E5" onclick="openRecapSortModal()" title="Export 6-page summary recap report as PDF">📄 Recap Report</button>
-    <button class="hbtn" id="btn-activity" style="display:none;background:#0369A1;color:#fff;border-color:#0369A1" onclick="openActivityModal()" title="Export activity change-log report as PDF">🗓 Activity Report</button>
-    <button class="hbtn" id="btn-overdue" style="display:none;background:#B45309;color:#fff;border-color:#B45309" onclick="openOverdueModal()" title="Export overdue re-inspections report as PDF">⏱ Overdue Report</button>
+    <!-- Reports dropdown menu (Quote A reports grouped into dropdown to prevent header menu cut-off) -->
+    <div id="reports-menu-wrap" style="position:relative;display:none">
+      <button class="hbtn" id="btn-reports-menu" type="button" onclick="toggleReportsMenu(event)" title="View and export reports" aria-haspopup="true" aria-expanded="false"
+        style="background:#6366F1;color:#fff;border-color:#6366F1;display:flex;align-items:center;gap:6px;font-weight:600">
+        <span>📑 Reports</span>
+        <span id="reports-menu-arrow" style="font-size:0.6rem;transition:transform 0.15s;display:inline-block">▼</span>
+      </button>
+      <div id="reports-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:230px;background:#fff;border:1px solid #E2E8F0;border-radius:10px;box-shadow:0 10px 25px rgba(15,23,42,0.15);z-index:3100;overflow:hidden;padding:6px">
+        <button type="button" class="report-menu-item" id="btn-pdf" onclick="openReportFromMenu(openPdfSortModal)" style="display:none">
+          <span style="width:28px;height:28px;border-radius:6px;background:#F3E8FF;color:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0">📋</span>
+          <div>
+            <div style="font-weight:700;color:#1E293B;line-height:1.2">PDF Report</div>
+            <div style="font-size:0.7rem;color:#64748B;font-weight:400">Findings with map &amp; photos</div>
+          </div>
+        </button>
+        <button type="button" class="report-menu-item" id="btn-recap" onclick="openReportFromMenu(openRecapSortModal)" style="display:none">
+          <span style="width:28px;height:28px;border-radius:6px;background:#EEF2FF;color:#4F46E5;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0">📄</span>
+          <div>
+            <div style="font-weight:700;color:#1E293B;line-height:1.2">Recap Report</div>
+            <div style="font-size:0.7rem;color:#64748B;font-weight:400">6-page summary recap</div>
+          </div>
+        </button>
+        <button type="button" class="report-menu-item" id="btn-activity" onclick="openReportFromMenu(openActivityModal)" style="display:none">
+          <span style="width:28px;height:28px;border-radius:6px;background:#E0F2FE;color:#0284C7;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0">🗓</span>
+          <div>
+            <div style="font-weight:700;color:#1E293B;line-height:1.2">Activity Report</div>
+            <div style="font-size:0.7rem;color:#64748B;font-weight:400">Date-wise activity log</div>
+          </div>
+        </button>
+        <button type="button" class="report-menu-item" id="btn-overdue" onclick="openReportFromMenu(openOverdueModal)" style="display:none">
+          <span style="width:28px;height:28px;border-radius:6px;background:#FEF3C7;color:#B45309;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0">⏱</span>
+          <div>
+            <div style="font-weight:700;color:#1E293B;line-height:1.2">Overdue Report</div>
+            <div style="font-size:0.7rem;color:#64748B;font-weight:400">Pending re-inspections</div>
+          </div>
+        </button>
+      </div>
+    </div>
     <button class="hbtn" id="btn-parcels" style="display:none;background:#0F766E;color:#fff;border-color:#0F766E" onclick="triggerParcelUpload()" title="Upload updated parcels XLSX to refresh the parcel list">📂 Update Parcels</button>
     <input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importFindings(this)">
     <input type="file" id="parcel-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="importParcelsXlsx(this)">
@@ -3330,6 +3389,7 @@ function applyPermissions(role) {
   const btnExport = document.getElementById('btn-export');
   const btnImport = document.getElementById('btn-import');
   const btnUpdateParcels = document.getElementById('btn-parcels');
+  const reportsMenuWrap = document.getElementById('reports-menu-wrap');
   const btnPdf = document.getElementById('btn-pdf');
   const btnRecap = document.getElementById('btn-recap');
   const btnActivity = document.getElementById('btn-activity');
@@ -3366,8 +3426,9 @@ function applyPermissions(role) {
     if (btnExport) btnExport.style.display = 'none';
     if (btnImport) btnImport.style.display = 'none';
     if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
-    if (btnPdf) btnPdf.style.display = '';
-    if (btnRecap) btnRecap.style.display = '';
+    if (reportsMenuWrap) reportsMenuWrap.style.display = 'inline-block';
+    if (btnPdf) btnPdf.style.display = 'flex';
+    if (btnRecap) btnRecap.style.display = 'flex';
     if (btnActivity) btnActivity.style.display = 'none';
     if (btnOverdue) btnOverdue.style.display = 'none';
   } else if (role === 'engineer') {
@@ -3376,6 +3437,7 @@ function applyPermissions(role) {
     if (btnExport) btnExport.style.display = 'none';
     if (btnImport) btnImport.style.display = 'none';
     if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
+    if (reportsMenuWrap) reportsMenuWrap.style.display = 'none';
     if (btnPdf) btnPdf.style.display = 'none';
     if (btnRecap) btnRecap.style.display = 'none';
     if (btnActivity) btnActivity.style.display = 'none';
@@ -3386,22 +3448,52 @@ function applyPermissions(role) {
     if (btnExport) btnExport.style.display = 'none';
     if (btnImport) btnImport.style.display = 'none';
     if (btnUpdateParcels) btnUpdateParcels.style.display = 'none';
-    if (btnPdf) btnPdf.style.display = '';
-    if (btnRecap) btnRecap.style.display = '';
-    if (btnActivity) btnActivity.style.display = '';
-    if (btnOverdue) btnOverdue.style.display = '';
+    if (reportsMenuWrap) reportsMenuWrap.style.display = 'inline-block';
+    if (btnPdf) btnPdf.style.display = 'flex';
+    if (btnRecap) btnRecap.style.display = 'flex';
+    if (btnActivity) btnActivity.style.display = 'flex';
+    if (btnOverdue) btnOverdue.style.display = 'flex';
   } else if (role === 'admin') {
     if (btnFi) btnFi.style.display = '';
     if (btnCz) btnCz.style.display = '';
     if (btnExport) btnExport.style.display = '';
     if (btnImport) btnImport.style.display = '';
     if (btnUpdateParcels) btnUpdateParcels.style.display = '';
-    if (btnPdf) btnPdf.style.display = '';
-    if (btnRecap) btnRecap.style.display = '';
-    if (btnActivity) btnActivity.style.display = '';
-    if (btnOverdue) btnOverdue.style.display = '';
+    if (reportsMenuWrap) reportsMenuWrap.style.display = 'inline-block';
+    if (btnPdf) btnPdf.style.display = 'flex';
+    if (btnRecap) btnRecap.style.display = 'flex';
+    if (btnActivity) btnActivity.style.display = 'flex';
+    if (btnOverdue) btnOverdue.style.display = 'flex';
   }
 }
+
+// Toggle the reports dropdown menu
+function toggleReportsMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('reports-dropdown');
+  const btn = document.getElementById('btn-reports-menu');
+  const arrow = document.getElementById('reports-menu-arrow');
+  if (!menu) return;
+  const open = menu.style.display === 'block';
+  // close user menu if open
+  const userMenu = document.getElementById('user-menu');
+  if (userMenu) userMenu.style.display = 'none';
+  menu.style.display = open ? 'none' : 'block';
+  if (btn) btn.setAttribute('aria-expanded', String(!open));
+  if (arrow) arrow.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+window.toggleReportsMenu = toggleReportsMenu;
+
+function openReportFromMenu(fn) {
+  const menu = document.getElementById('reports-dropdown');
+  if (menu) menu.style.display = 'none';
+  const btn = document.getElementById('btn-reports-menu');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+  const arrow = document.getElementById('reports-menu-arrow');
+  if (arrow) arrow.style.transform = 'rotate(0deg)';
+  if (typeof fn === 'function') fn();
+}
+window.openReportFromMenu = openReportFromMenu;
 
 // Toggle the profile dropdown. Stops propagation so the document-level
 // outside-click handler below doesn't immediately re-close it.
@@ -3411,27 +3503,55 @@ function toggleUserMenu(e) {
   const btn = document.getElementById('profile-btn');
   if (!menu) return;
   const open = menu.style.display === 'block';
+  // close reports menu if open
+  const reportsMenu = document.getElementById('reports-dropdown');
+  if (reportsMenu) reportsMenu.style.display = 'none';
+  const reportsBtn = document.getElementById('btn-reports-menu');
+  if (reportsBtn) reportsBtn.setAttribute('aria-expanded', 'false');
+  const arrow = document.getElementById('reports-menu-arrow');
+  if (arrow) arrow.style.transform = 'rotate(0deg)';
+
   menu.style.display = open ? 'none' : 'block';
   if (btn) btn.setAttribute('aria-expanded', String(!open));
 }
 window.toggleUserMenu = toggleUserMenu;
 
-// Close the profile menu on any click outside it, or on Escape.
+// Close menus on any click outside them, or on Escape.
 document.addEventListener('click', function(e) {
   const wrap = document.getElementById('user-menu-wrap');
   const menu = document.getElementById('user-menu');
-  if (!wrap || !menu || menu.style.display !== 'block') return;
-  if (!wrap.contains(e.target)) {
+  if (wrap && menu && menu.style.display === 'block' && !wrap.contains(e.target)) {
     menu.style.display = 'none';
-    document.getElementById('profile-btn').setAttribute('aria-expanded', 'false');
+    const profileBtn = document.getElementById('profile-btn');
+    if (profileBtn) profileBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  const reportsWrap = document.getElementById('reports-menu-wrap');
+  const reportsMenu = document.getElementById('reports-dropdown');
+  if (reportsWrap && reportsMenu && reportsMenu.style.display === 'block' && !reportsWrap.contains(e.target)) {
+    reportsMenu.style.display = 'none';
+    const reportsBtn = document.getElementById('btn-reports-menu');
+    if (reportsBtn) reportsBtn.setAttribute('aria-expanded', 'false');
+    const arrow = document.getElementById('reports-menu-arrow');
+    if (arrow) arrow.style.transform = 'rotate(0deg)';
   }
 });
+
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     const menu = document.getElementById('user-menu');
     if (menu && menu.style.display === 'block') {
       menu.style.display = 'none';
-      document.getElementById('profile-btn').setAttribute('aria-expanded', 'false');
+      const profileBtn = document.getElementById('profile-btn');
+      if (profileBtn) profileBtn.setAttribute('aria-expanded', 'false');
+    }
+    const reportsMenu = document.getElementById('reports-dropdown');
+    if (reportsMenu && reportsMenu.style.display === 'block') {
+      reportsMenu.style.display = 'none';
+      const reportsBtn = document.getElementById('btn-reports-menu');
+      if (reportsBtn) reportsBtn.setAttribute('aria-expanded', 'false');
+      const arrow = document.getElementById('reports-menu-arrow');
+      if (arrow) arrow.style.transform = 'rotate(0deg)';
     }
   }
 });
