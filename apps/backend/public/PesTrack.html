@@ -293,56 +293,68 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- m-pdf-sort : PDF Report — sort order, thumbnail map, full-history date range -->
 <div class="mov" id="m-pdf-sort" style="display:none">
-  <div class="mod" style="max-width:340px">
-    <h3>📋 PDF Report — Sort Order</h3>
-    <p style="font-size:.78rem;color:#64748B;margin:0 0 12px">Choose how findings are ordered in the report:</p>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="number" checked style="accent-color:#7C3AED">
-        <span><strong>Finding #</strong> <span style="color:#94A3B8;font-size:.75rem">(default — sequential order)</span></span>
+  <div class="mod" style="max-width:440px;border-radius:12px;padding:22px 24px;box-shadow:0 12px 36px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 6px;font-size:1.05rem;color:#1C2333;font-weight:700">📋 PDF Report — Sort Order</h3>
+    <p style="font-size:.8rem;color:#64748B;margin:0 0 14px">Choose how findings are ordered in the report:</p>
+    
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="pdf-sort" value="number" checked style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Finding #</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(default — sequential order)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="category" style="accent-color:#7C3AED">
-        <span><strong>By Category</strong> <span style="color:#94A3B8;font-size:.75rem">(grouped by source type)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="pdf-sort" value="category" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Category</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(grouped by source type)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="escalated" style="accent-color:#7C3AED">
-        <span><strong>By Assigned / Escalated To</strong> <span style="color:#94A3B8;font-size:.75rem">(based on most recent escalation)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="pdf-sort" value="escalated" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Assigned / Escalated To</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(based on most recent escalation)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="pdf-sort" value="quadrant" style="accent-color:#7C3AED">
-        <span><strong>By Parcel</strong> <span style="color:#94A3B8;font-size:.75rem">(parcel/area A → Z, then by finding # within each parcel)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="pdf-sort" value="quadrant" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Quadrant &amp; Parcel</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(NW → NE → SW → SE, then by parcel/area)</span>
+        </div>
       </label>
     </div>
-    <div style="border-top:1px solid #E2E8F0;padding-top:12px;margin-bottom:14px">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="checkbox" id="pdf-thumbmap" style="accent-color:#7C3AED;margin-top:3px">
-        <span><strong>Add photo thumbnail map</strong>
-          <span style="color:#94A3B8;font-size:.75rem;display:block;margin-top:2px">
-            Extra map page with the first photo of each finding beside its marker.
-            Useful on smaller sites; with 100+ findings the photos overlap heavily.</span></span>
+
+    <div style="border-top:1px solid #E2E8F0;padding-top:12px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;text-transform:none;text-align:left;margin:0">
+        <input type="checkbox" id="pdf-thumbmap" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Add photo thumbnail map</strong>
+          <span style="color:#94A3B8;font-size:.75rem">Extra map page with the first photo of each finding beside its marker.</span>
+        </div>
       </label>
-    </div>
-    <div style="border-top:1px solid #E2E8F0;padding-top:12px;margin-bottom:14px">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="checkbox" id="pdf-fullhist" style="accent-color:#7C3AED;margin-top:3px" onchange="togglePdfHistRange()">
-        <span><strong>Print full history for a date range</strong>
-          <span style="color:#94A3B8;font-size:.75rem;display:block;margin-top:2px">
-            Every visit in that window prints in full, with photos — the way the
-            report worked before. Outside the window, visits stay one-line summaries.
-            Maximum range 6 months.</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;text-transform:none;text-align:left;margin:0">
+        <input type="checkbox" id="pdf-fullhist" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;" onchange="togglePdfHistRange()">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Print full history for a date range</strong>
+          <span style="color:#94A3B8;font-size:.75rem">Visits within the date range print in full with photos (max 6 months).</span>
+        </div>
       </label>
-      <div id="pdf-hist-range" style="display:none;gap:10px;margin:10px 0 0 28px">
-        <label style="font-size:.78rem;color:#475569">From
-          <input type="date" id="pdf-hist-from" style="display:block;margin-top:3px;padding:5px;border:1px solid #CBD5E1;border-radius:5px;font-size:.8rem">
+      <div id="pdf-hist-range" style="display:none;gap:10px;margin-left:26px;margin-top:2px">
+        <label style="font-size:.78rem;color:#475569;text-transform:none;margin:0">From
+          <input type="date" id="pdf-hist-from" style="display:block;margin-top:2px;padding:4px 8px;border:1px solid #CBD5E1;border-radius:5px;font-size:.8rem;width:auto">
         </label>
-        <label style="font-size:.78rem;color:#475569">To
-          <input type="date" id="pdf-hist-to" style="display:block;margin-top:3px;padding:5px;border:1px solid #CBD5E1;border-radius:5px;font-size:.8rem">
+        <label style="font-size:.78rem;color:#475569;text-transform:none;margin:0">To
+          <input type="date" id="pdf-hist-to" style="display:block;margin-top:2px;padding:4px 8px;border:1px solid #CBD5E1;border-radius:5px;font-size:.8rem;width:auto">
         </label>
       </div>
-      <div id="pdf-hist-err" style="display:none;margin:8px 0 0 28px;font-size:.75rem;color:#DC2626"></div>
+      <div id="pdf-hist-err" style="display:none;margin-left:26px;font-size:.75rem;color:#DC2626"></div>
     </div>
-    <div class="mbtns">
+
+    <div class="mbtns" style="margin-top:16px">
       <button class="bcancel" onclick="document.getElementById('m-pdf-sort').style.display='none'">Cancel</button>
       <button class="bok" style="background:#7C3AED;border-color:#7C3AED" onclick="launchPdfWithSort()">Generate PDF</button>
     </div>
@@ -351,28 +363,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- m-recap-sort : Recap Report — sort order -->
 <div class="mov" id="m-recap-sort" style="display:none">
-  <div class="mod" style="max-width:340px">
-    <h3>📄 Recap Report — Sort Order</h3>
-    <p style="font-size:.78rem;color:#64748B;margin:0 0 12px">Prints the <strong>site map</strong>, the <strong>Recap &amp; Totals</strong> page and the <strong>Finding Recap</strong> table — no per-finding detail pages. Choose how findings are ordered:</p>
+  <div class="mod" style="max-width:440px;border-radius:12px;padding:22px 24px;box-shadow:0 12px 36px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 6px;font-size:1.05rem;color:#1C2333;font-weight:700">📄 Recap Report — Sort Order</h3>
+    <p style="font-size:.8rem;color:#64748B;margin:0 0 14px;line-height:1.4">Prints the <strong>site map</strong>, the <strong>Recap &amp; Totals</strong> page and the <strong>Finding Recap</strong> table — no per-finding detail pages. Choose how findings are ordered:</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="recap-sort" value="number" checked style="accent-color:#4F46E5">
-        <span><strong>Finding #</strong> <span style="color:#94A3B8;font-size:.75rem">(default — sequential order)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="recap-sort" value="number" checked style="accent-color:#4F46E5;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Finding #</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(default — sequential order)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="recap-sort" value="category" style="accent-color:#4F46E5">
-        <span><strong>By Category</strong> <span style="color:#94A3B8;font-size:.75rem">(grouped by source type)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="recap-sort" value="category" style="accent-color:#4F46E5;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Category</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(grouped by source type)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="recap-sort" value="escalated" style="accent-color:#4F46E5">
-        <span><strong>By Assigned To</strong> <span style="color:#94A3B8;font-size:.75rem">(based on most recent escalation)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="recap-sort" value="escalated" style="accent-color:#4F46E5;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Assigned To</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(based on most recent escalation)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="recap-sort" value="quadrant" style="accent-color:#4F46E5">
-        <span><strong>By Parcel</strong> <span style="color:#94A3B8;font-size:.75rem">(parcel/area A → Z, then by finding # within each parcel)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="recap-sort" value="quadrant" style="accent-color:#4F46E5;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>By Parcel</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(parcel/area A → Z, then by finding # within each parcel)</span>
+        </div>
       </label>
     </div>
-    <div class="mbtns">
+    <div class="mbtns" style="margin-top:16px">
       <button class="bcancel" onclick="document.getElementById('m-recap-sort').style.display='none'">Cancel</button>
       <button class="bok" style="background:#4F46E5;border-color:#4F46E5" onclick="launchRecapWithSort()">Generate Recap</button>
     </div>
@@ -381,53 +405,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- m-activity : Activity Report — date range and sort -->
 <div class="mov" id="m-activity" style="display:none">
-  <div class="mod" style="max-width:380px">
-    <h3>🗓 Activity Report</h3>
-    <p style="font-size:.78rem;color:#64748B;margin:0 0 14px">A dated log of every new finding, new visit and resolution in a period — with who logged it, category, label, parcel, observation and who it's assigned to.</p>
+  <div class="mod" style="max-width:440px;border-radius:12px;padding:22px 24px;box-shadow:0 12px 36px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 6px;font-size:1.05rem;color:#1C2333;font-weight:700">📑 Activity Report</h3>
+    <p style="font-size:.8rem;color:#64748B;margin:0 0 14px;line-height:1.4">A dated log of every new finding, new visit and resolution in a period — with who logged it, category, label, parcel, observation and who it's assigned to.</p>
     <div style="display:flex;gap:12px;margin-bottom:8px">
       <div style="flex:1">
-        <label style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700;display:block;margin-bottom:4px">From date</label>
-        <input type="date" id="act-from" style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid #D0D5DD;font-size:0.9rem;font-family:inherit">
+        <label style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.05em;font-weight:700;display:block;margin-bottom:4px">From date</label>
+        <input type="date" id="act-from" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:0.85rem;font-family:inherit">
       </div>
       <div style="flex:1">
-        <label style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700;display:block;margin-bottom:4px">To date</label>
-        <input type="date" id="act-to" style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid #D0D5DD;font-size:0.9rem;font-family:inherit">
+        <label style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.05em;font-weight:700;display:block;margin-bottom:4px">To date</label>
+        <input type="date" id="act-to" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:0.85rem;font-family:inherit">
       </div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-      <button class="hbtn" style="font-size:.68rem;padding:3px 8px" onclick="actQuickRange(7)">Last 7 days</button>
-      <button class="hbtn" style="font-size:.68rem;padding:3px 8px" onclick="actQuickRange(30)">Last 30 days</button>
-      <button class="hbtn" style="font-size:.68rem;padding:3px 8px" onclick="actQuickRange('all')">All time</button>
+      <button type="button" class="hbtn" style="font-size:.72rem;padding:4px 10px;border-radius:16px;background:#fff;border:1px solid #CBD5E1;font-weight:600;color:#334155;cursor:pointer" onclick="actQuickRange(7)">Last 7 days</button>
+      <button type="button" class="hbtn" style="font-size:.72rem;padding:4px 10px;border-radius:16px;background:#fff;border:1px solid #CBD5E1;font-weight:600;color:#334155;cursor:pointer" onclick="actQuickRange(30)">Last 30 days</button>
+      <button type="button" class="hbtn" style="font-size:.72rem;padding:4px 10px;border-radius:16px;background:#fff;border:1px solid #CBD5E1;font-weight:600;color:#334155;cursor:pointer" onclick="actQuickRange('all')">All time</button>
     </div>
-    <label style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700;display:block;margin-bottom:6px">Sort by</label>
+    <label style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.05em;font-weight:700;display:block;margin-bottom:6px">Sort by</label>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="act-sort" value="date" checked style="accent-color:#0369A1">
-        <span><strong>Date</strong> <span style="color:#94A3B8;font-size:.75rem">(most recent first)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="act-sort" value="date" checked style="accent-color:#0284C7;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Date</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(most recent first)</span>
+        </div>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.85rem">
-        <input type="radio" name="act-sort" value="logged" style="accent-color:#0369A1">
-        <span><strong>Logged by</strong> <span style="color:#94A3B8;font-size:.75rem">(grouped by person, newest first within each)</span></span>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
+        <input type="radio" name="act-sort" value="logged" style="accent-color:#0284C7;margin-top:2px;width:auto;height:auto;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <strong>Logged by</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(grouped by person, newest first within each)</span>
+        </div>
       </label>
     </div>
-    <div class="mbtns">
+    <div class="mbtns" style="margin-top:16px">
       <button class="bcancel" onclick="document.getElementById('m-activity').style.display='none'">Cancel</button>
-      <button class="bok" style="background:#0369A1;border-color:#0369A1" onclick="launchActivityReport()">Generate PDF</button>
+      <button class="bok" style="background:#0284C7;border-color:#0284C7" onclick="launchActivityReport()">Generate PDF</button>
     </div>
   </div>
 </div>
 
 <!-- m-overdue : Overdue Report — threshold in days -->
 <div class="mov" id="m-overdue" style="display:none">
-  <div class="mod" style="max-width:380px">
-    <h3>⏱ Overdue Re-inspection Report</h3>
-    <p style="font-size:.78rem;color:#64748B;margin:0 0 14px">Lists every open finding that has <strong>not</strong> been re-inspected within the chosen window, oldest last-inspection first. Resolved findings are excluded.</p>
-    <label style="font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.06em;font-weight:700;display:block;margin-bottom:4px">Not re-inspected within the last</label>
+  <div class="mod" style="max-width:440px;border-radius:12px;padding:22px 24px;box-shadow:0 12px 36px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 6px;font-size:1.05rem;color:#1C2333;font-weight:700">⏱ Overdue Re-inspection Report</h3>
+    <p style="font-size:.8rem;color:#64748B;margin:0 0 14px;line-height:1.4">Lists every open finding that has <strong>not</strong> been re-inspected within the chosen window, oldest last-inspection first. Resolved findings are excluded.</p>
+    <label style="font-size:.65rem;color:#64748B;text-transform:uppercase;letter-spacing:.05em;font-weight:700;display:block;margin-bottom:4px">Not re-inspected within the last</label>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-      <input type="number" id="ov-days" value="8" min="1" max="365" style="width:90px;padding:6px 8px;border-radius:4px;border:1px solid #D0D5DD;font-size:0.9rem;font-family:inherit">
+      <input type="number" id="ov-days" value="8" min="1" max="365" style="width:90px;padding:7px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:0.85rem;font-family:inherit">
       <span style="font-size:.85rem;color:#475569">days</span>
     </div>
-    <div class="mbtns">
+    <div class="mbtns" style="margin-top:16px">
       <button class="bcancel" onclick="document.getElementById('m-overdue').style.display='none'">Cancel</button>
       <button class="bok" style="background:#B45309;border-color:#B45309" onclick="launchOverdueReport()">Generate PDF</button>
     </div>
