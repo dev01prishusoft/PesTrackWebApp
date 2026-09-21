@@ -20,7 +20,7 @@ export interface User {
   username: string;
   email: string;
   full_name: string | null;
-  role: 'admin' | 'engineer' | 'client_viewer';
+  role: 'admin' | 'site_manager' | 'engineer' | 'client_viewer';
   is_active: boolean;
   last_login: string | null;
   created_at: string;
@@ -43,7 +43,7 @@ export interface AuthUser {
   username: string;
   email: string;
   fullName: string | null;
-  role: 'admin' | 'engineer' | 'client_viewer';
+  role: 'admin' | 'site_manager' | 'engineer' | 'client_viewer';
   // IDs of the sites this user is assigned to (used to scope the site picker).
   siteIds: string[];
 }

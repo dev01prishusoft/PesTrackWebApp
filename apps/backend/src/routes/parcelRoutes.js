@@ -8,6 +8,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
 
 router.get('/', authenticate, ctrl.getParcels);
-router.post('/upload', authenticate, requireRole('admin', 'engineer'), upload.single('file'), ctrl.uploadParcels);
+router.post('/upload', authenticate, requireRole('admin'), upload.single('file'), ctrl.uploadParcels);
 
 module.exports = router;
