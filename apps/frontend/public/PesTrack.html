@@ -638,6 +638,7 @@ window.locateMe = locateMe;
 
 // ── Export findings as JSON file (photos compressed for sharing) ──
 async function exportFindings(){
+  const currentUser = window._ptCurrentUser;
   if (currentUser && currentUser.role !== 'admin') {
     showNotif('⚠️ Only administrators can export JSON data', true, 3000);
     return;
@@ -718,6 +719,7 @@ window.exportFindings = exportFindings;
 
 // ── Import findings from JSON file ───────────────────────────────
 function triggerImport(){
+  const currentUser = window._ptCurrentUser;
   if (currentUser && currentUser.role !== 'admin') {
     showNotif('⚠️ Only administrators can import JSON data', true, 3000);
     return;
@@ -963,6 +965,8 @@ window.importFindings = importFindings;
 // ── Active Session & Scoped Data State ──────────────────────────────
 let currentSiteId = null;
 let currentUser = null;
+// Read-only accessor for the non-IIFE <script> block (import/export JSON).
+Object.defineProperty(window, "_ptCurrentUser", { get: () => currentUser, configurable: true });
 let sites = [];
 let parcels = [];
 

@@ -177,6 +177,15 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
   if(!window._ptFindings || window._ptFindings.length === 0){
     showNotif('⚠️ No findings to export', true, 3000); return;
   }
+  // A dated history report only covers findings with a visit in the window.
+  const _inHistRange = v => {
+    const d = String((v && v.date) || '').slice(0,10);
+    return !!d && d >= opts.histFrom && d <= opts.histTo;
+  };
+  if(opts.histFrom && opts.histTo &&
+     !window._ptFindings.some(loc => (loc.visits||[]).some(_inHistRange))){
+    showNotif(`⚠️ No visits recorded between ${opts.histFrom} and ${opts.histTo}`, true, 4000); return;
+  }
   showNotif('⏳ Initialising…', false, 0);
 
   // Yield to let UI update, then run async
@@ -445,7 +454,9 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     // Filter findings by hide-resolved toggle for marker generation, counts, and detail pages
     const _baseFindings = opts.onlyLocId
       ? findings.filter(loc => loc.locId === opts.onlyLocId)
-      : findings;
+      : (opts.histFrom && opts.histTo)
+        ? findings.filter(loc => (loc.visits||[]).some(_inHistRange))
+        : findings;
     // A single-finding report ignores Hide Resolved — you asked for that finding.
     const visibleFindings = (PDF_HIDE_RESOLVED && !opts.onlyLocId)
       ? _baseFindings.filter(loc => {
@@ -1020,9 +1031,8 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     const ONLY_LOC  = opts.onlyLocId || null;
     function isFullVisit(vi, v){
       if(ONLY_LOC) return true;                    // one finding: everything
-      if(vi === 0) return true;                    // current status, always
-      if(HIST_FROM && HIST_TO && v && v.date && v.date >= HIST_FROM && v.date <= HIST_TO) return true;
-      return false;
+      if(HIST_FROM && HIST_TO) return _inHistRange(v); // dated report: only visits in the window
+      return vi === 0;                             // current status, always
     }
 
     // Queue every Arabic note in the report and render them in one pass
