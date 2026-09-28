@@ -31,7 +31,8 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 app.use(cors({ origin: process.env.FRONTEND_URL || true, credentials: true }));
-app.use(express.json({ limit: '15mb' })); // large limit for JSON import at go-live
+app.use(express.json({ limit: '50mb' })); // large limit for JSON import at go-live
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Throttle auth endpoints against brute force.
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });

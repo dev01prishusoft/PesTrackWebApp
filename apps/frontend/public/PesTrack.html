@@ -3642,68 +3642,104 @@ function uploadPhotoToServer(blob) {
   });
 }
 
-window._importFindingsData = function(arr, czArr){
+window._importFindingsData = async function(arr, czArr){
   if (currentUser && currentUser.role !== 'admin') {
     showNotif('⚠️ Admin role required to import backups', true, 3000);
     return;
   }
-  
+
   const token = localStorage.getItem('pt_token');
-  showNotif(`⏳ Importing ${arr.length} finding(s)...`, false, 0);
-  
-  const payloadFindings = arr.map(loc => {
-    const visits = [...(loc.visits || [])];
-    const parcelId = resolveParcelId(loc.parcel, loc.lat, loc.lng);
-    return {
-      lat: Number(loc.lat),
-      lng: Number(loc.lng),
-      parcel_id: parcelId,
-      ref_num: loc.refNum,
-      visits: visits.map(v => ({
-        visitDate: v.date,
-        categoryId: categoryLabelToId[CATEGORY_MAP[v.cat]] || categoryLabelToId['Other'],
-        label: v.label || '',
-        notes: v.notes || '',
-        escalatedToId: escalationLabelToId[v.escalated] || escalationLabelToId['Not assigned'],
-        statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId['1st Offense'],
-        photos: v.photos || []
+
+  // Count base64 photos so we can show progress. Large JSON bodies with
+  // embedded photos trigger 413 on Render; upload photos via multipart first.
+  let totalPhotos = 0;
+  let uploadedPhotos = 0;
+  for (const loc of arr) {
+    for (const v of (loc.visits || [])) {
+      for (const p of (v.photos || [])) {
+        if (typeof p === 'string' && p.startsWith('data:')) totalPhotos++;
+      }
+    }
+  }
+
+  async function resolvePhoto(photo) {
+    if (typeof photo !== 'string' || !photo.startsWith('data:')) return photo;
+    const { key } = await uploadPhotoToServer(dataURLtoBlob(photo));
+    uploadedPhotos++;
+    if (totalPhotos > 0 && (uploadedPhotos === totalPhotos || uploadedPhotos % 5 === 0)) {
+      showNotif(`⏳ Uploading photos ${uploadedPhotos}/${totalPhotos}…`, false, 0);
+    }
+    return key;
+  }
+
+  try {
+    if (totalPhotos > 0) {
+      showNotif(`⏳ Uploading ${totalPhotos} photo(s)…`, false, 0);
+    } else {
+      showNotif(`⏳ Importing ${arr.length} finding(s)...`, false, 0);
+    }
+
+    const payloadFindings = [];
+    for (const loc of arr) {
+      const visits = [];
+      for (const v of (loc.visits || [])) {
+        const photos = [];
+        for (const p of (v.photos || [])) {
+          photos.push(await resolvePhoto(p));
+        }
+        visits.push({
+          visitDate: v.date,
+          categoryId: categoryLabelToId[CATEGORY_MAP[v.cat]] || categoryLabelToId['Other'],
+          label: v.label || '',
+          notes: v.notes || '',
+          escalatedToId: escalationLabelToId[v.escalated] || escalationLabelToId['Not assigned'],
+          statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId['1st Offense'],
+          photos
+        });
+      }
+      payloadFindings.push({
+        lat: Number(loc.lat),
+        lng: Number(loc.lng),
+        parcel_id: resolveParcelId(loc.parcel, loc.lat, loc.lng),
+        ref_num: loc.refNum,
+        visits
+      });
+    }
+
+    const bulkPayload = {
+      siteId: currentSiteId,
+      findings: payloadFindings,
+      zones: (czArr || []).map(cz => ({
+        lat: Number(cz.lat),
+        lng: Number(cz.lng)
       }))
     };
-  });
 
-  const payloadZones = (czArr || []).map(cz => ({
-    lat: Number(cz.lat),
-    lng: Number(cz.lng)
-  }));
+    showNotif(`⏳ Saving ${arr.length} finding(s)…`, false, 0);
 
-  const bulkPayload = {
-    siteId: currentSiteId,
-    findings: payloadFindings,
-    zones: payloadZones
-  };
-
-  fetch('/api/findings/import-bulk', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token
-    },
-    body: JSON.stringify(bulkPayload)
-  })
-  .then(res => {
+    const res = await fetch('/api/findings/import-bulk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(bulkPayload)
+    });
     if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
-    if (!res.ok) throw new Error('Failed to import backup bulk');
-    return res.json();
-  })
-  .then(() => {
+    if (res.status === 413) throw new Error('Import payload too large (413). Try again or contact support.');
+    if (!res.ok) {
+      let detail = 'Failed to import backup bulk';
+      try { const j = await res.json(); if (j && j.error) detail = j.error; } catch (_) {}
+      throw new Error(detail);
+    }
+
     loadFindings();
     loadConstrZones();
     showNotif(`✅ Imported ${arr.length} finding(s)`);
-  })
-  .catch(err => {
+  } catch (err) {
     console.error(err);
-    showNotif('❌ Backup import failed', true, 5000);
-  });
+    showNotif('❌ Backup import failed: ' + (err.message || 'unknown error'), true, 6000);
+  }
 };
 
 window.addEventListener('load', checkAuthAndStart);

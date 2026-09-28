@@ -8,6 +8,12 @@ function errorHandler(err, req, res, next) {
       fields: err.fields,
     });
   }
+  // body-parser / express.json payload too large
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: 'Request body too large. For JSON imports with photos, upload photos first or use a smaller file.',
+    });
+  }
   // Postgres unique violation
   if (err.code === '23505') {
     return res.status(409).json({ error: 'A record with that value already exists' });
