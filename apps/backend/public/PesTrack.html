@@ -1443,7 +1443,7 @@ const FI_I18N = {
     lblCat: 'Category',
     lblStat: 'Status',
     lblShort: 'Label (short)',
-    phShort: 'e.g. Blocked drain NE corner…',
+    phShort: 'e.g. villa number, or blocked drain block 3',
     lblDate: 'Date of inspection',
     lblNotes: 'Observations, Recommendations & Action',
     phNotes: 'Describe the finding, recommended corrective action, and any action taken or assigned…',
@@ -1493,7 +1493,7 @@ const FI_I18N = {
     lblCat: 'الفئة / المصدر',
     lblStat: 'الحالة',
     lblShort: 'عنوان موجز',
-    phShort: 'مثال: مصرف مسدود الزاوية الشمالية...',
+    phShort: 'مثال: رقم الوحدة أو "صرف مسدود" — باللغة الإنجليزية فقط',
     lblDate: 'تاريخ الفحص',
     lblNotes: 'الملاحظات والتوصيات والإجراءات',
     phNotes: 'صف الملاحظة والإجراء التصحيحي الموصى به وأي إجراء تم اتخاذه أو تكليفه...',
@@ -1646,7 +1646,7 @@ function injectModals(){
         <button class="stat-btn resolved" id="sb-resolved" onclick="setFiStat('resolved',this)">🟢 Resolved</button>
       </div>
       <label id="fi-lbl-short">Label (short)</label>
-      <input id="fi-lbl" maxlength="255" placeholder="e.g. Blocked drain NE corner…">
+      <input id="fi-lbl" maxlength="255" placeholder="e.g. villa number, or blocked drain block 3">
       <label id="fi-lbl-date">Date of inspection</label>
       <input id="fi-date" type="date">
       <label id="fi-lbl-notes">Observations, Recommendations & Action</label>
