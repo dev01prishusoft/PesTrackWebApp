@@ -1756,16 +1756,39 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
       pdf.setTextColor(90,100,120);
       pdf.text(_lbl, PW/2, PH-4, {align:'center'});
     }
+    let sortFileSuffix = '';
+    if (sortBy === 'category') {
+      sortFileSuffix = ' by Category';
+    } else if (sortBy === 'quadrant') {
+      sortFileSuffix = ' by Parcel';
+    } else if (sortBy === 'escalated') {
+      sortFileSuffix = ' by Assigned To';
+    } else if (sortBy === 'number') {
+      sortFileSuffix = ' by Finding #';
+    }
+
+    const clientName = CLIENT || 'El Gouna';
+    try {
+      pdf.setProperties({
+        title: recapOnly
+          ? `PesTrack Recap Report${sortFileSuffix} - ${clientName} ${date}`
+          : `PesTrack Pest Pressure Sources${sortFileSuffix} - ${clientName} ${date}`,
+        subject: `PesTrack Site Findings Report (${sortLabel})`,
+        author: 'PesTrack',
+        creator: 'PesTrack SOTAICO'
+      });
+    } catch (_) {}
+
     if(recapOnly){
-      pdf.save(`PesTrack Recap Report - El Gouna ${date}.pdf`);
+      pdf.save(`PesTrack Recap Report${sortFileSuffix} - ${clientName} ${date}.pdf`);
     } else if(opts.onlyLocId){
       const _one = visibleFindings[0];
       const _ref = _one ? stripZeros(_one.refNum||'?') : '?';
-      pdf.save(`PesTrack Finding ${_ref} Full History - El Gouna ${date}.pdf`);
+      pdf.save(`PesTrack Finding ${_ref} Full History - ${clientName} ${date}.pdf`);
     } else if(opts.histFrom && opts.histTo){
-      pdf.save(`PesTrack Full History ${opts.histFrom} to ${opts.histTo} - El Gouna.pdf`);
+      pdf.save(`PesTrack Full History ${opts.histFrom} to ${opts.histTo} - ${clientName}.pdf`);
     } else {
-      pdf.save(`PesTrack Pest Pressure Sources - El Gouna ${date}.pdf`);
+      pdf.save(`PesTrack Pest Pressure Sources${sortFileSuffix} - ${clientName} ${date}.pdf`);
     }
     showNotif('✅ Report saved');
   }catch(err){
@@ -1861,7 +1884,7 @@ function _buildActivityRows(fromDate, toDate, sortBy){
         label:    v.label || '',
         parcel:   loc.parcel || 'Unassigned',
         notes:    v.notes || '',
-        assigned: (v.escalated && v.escalated !== 'Not assigned') ? v.escalated : '',
+        assigned: (v.escalated && v.escalated !== 'Not assigned') ? (v.escalated === 'SOTAICOs' ? 'SOTAICO' : v.escalated) : '',
         status:   v.status || 'open'
       });
     });
@@ -2122,7 +2145,7 @@ function _buildOverdueRows(thresholdDays){
       cat:         CAT_LABELS[latest.cat] || latest.cat || '',
       label:       latest.label || '',
       parcel:      loc.parcel || 'Unassigned',
-      assigned:    (latest.escalated && latest.escalated !== 'Not assigned') ? latest.escalated : '',
+      assigned:    (latest.escalated && latest.escalated !== 'Not assigned') ? (latest.escalated === 'SOTAICOs' ? 'SOTAICO' : latest.escalated) : '',
       loggedBy:    window._visitUser(latest),
       notes:       latest.notes || ''
     });

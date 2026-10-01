@@ -381,8 +381,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.85rem;padding:3px 0;text-transform:none;text-align:left;margin:0">
         <input type="radio" name="pdf-sort" value="quadrant" style="accent-color:#7C3AED;margin-top:2px;width:auto;height:auto;">
         <div style="display:flex;flex-direction:column;gap:1px">
-          <strong>By Quadrant &amp; Parcel</strong>
-          <span style="color:#94A3B8;font-size:.75rem">(NW → NE → SW → SE, then by parcel/area)</span>
+          <strong>By Parcel</strong>
+          <span style="color:#94A3B8;font-size:.75rem">(by alphabetical order)</span>
         </div>
       </label>
     </div>
@@ -1467,6 +1467,7 @@ const FI_I18N = {
       'structural': 'Dysfunctional Swim Pool',
       'housekeeping': 'Standing water - Other',
       'irrigation': 'Landscape/Irrigation',
+      'construction': 'Construction Debris',
       'debris': 'Construction Debris',
       'mep': 'Drains & Manholes',
       'other': 'Other'
@@ -1516,6 +1517,7 @@ const FI_I18N = {
       'structural': 'مسبح معطل',
       'housekeeping': 'مياه راكدة - أخرى',
       'irrigation': 'مسطحات خضراء / ري',
+      'construction': 'مخلفات بناء',
       'debris': 'مخلفات بناء',
       'mep': 'مصارف وبالوعات',
       'other': 'أخرى'
@@ -2966,7 +2968,7 @@ function mapApiFinding(f){
         status: legacyStatus,
         label: v.label || '',
         notes: v.notes || '',
-        escalated: escalationIdToLabel[v.escalatedToId] || '',
+        escalated: (escalationIdToLabel[v.escalatedToId] === 'SOTAICOs') ? 'SOTAICO' : (escalationIdToLabel[v.escalatedToId] || ''),
         createdByName: v.createdByName || 'Unknown',
         createdById: v.createdById || null,
         engineerName: v.engineerName || 'Unknown',
@@ -3571,14 +3573,58 @@ function buildEscalationSelect() {
   blank.textContent = isAr ? '— غير محدد —' : '— Not assigned —';
   select.appendChild(blank);
   
-  Object.keys(escalationLabelToId).forEach(lbl => {
-    if (lbl === 'Not assigned') return;
+  const PREFERRED_ORDER = [
+    'SOTAICO',
+    'Client Super',
+    'Client FM',
+    'Client Subcontractor RS',
+    'Client Subcontractor OC',
+    'Client Subcontractor Other',
+    'Client Senior Management',
+    'Client Other',
+    'Other'
+  ];
+
+  const seen = new Set();
+  const rawLabels = Object.keys(escalationLabelToId).filter(lbl => lbl !== 'Not assigned');
+  const normalizedLabels = [];
+  rawLabels.forEach(lbl => {
+    const canonical = lbl === 'SOTAICOs' ? 'SOTAICO' : lbl;
+    if (!seen.has(canonical)) {
+      seen.add(canonical);
+      // If DB had SOTAICOs, opt value should match whatever key is in escalationLabelToId
+      // but prefer SOTAICO if both exist
+      const val = escalationLabelToId['SOTAICO'] ? 'SOTAICO' : lbl;
+      normalizedLabels.push({ val, display: canonical });
+    }
+  });
+
+  normalizedLabels.sort((a, b) => {
+    const ia = PREFERRED_ORDER.indexOf(a.display);
+    const ib = PREFERRED_ORDER.indexOf(b.display);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.display.localeCompare(b.display);
+  });
+
+  normalizedLabels.forEach(item => {
     const opt = document.createElement('option');
-    opt.value = lbl;
-    opt.textContent = isAr && FI_I18N.ar.escalations[lbl] ? FI_I18N.ar.escalations[lbl] : lbl;
+    opt.value = item.val;
+    const arabicTxt = FI_I18N.ar.escalations[item.display] || FI_I18N.ar.escalations[item.val];
+    opt.textContent = isAr && arabicTxt ? arabicTxt : item.display;
     select.appendChild(opt);
   });
-  if (currentVal) select.value = currentVal;
+
+  if (currentVal) {
+    if (select.querySelector(`option[value="${currentVal}"]`)) {
+      select.value = currentVal;
+    } else if (currentVal === 'SOTAICOs' && select.querySelector('option[value="SOTAICO"]')) {
+      select.value = 'SOTAICO';
+    } else if (currentVal === 'SOTAICO' && select.querySelector('option[value="SOTAICOs"]')) {
+      select.value = 'SOTAICOs';
+    }
+  }
 }
 
 function changeSite(siteId) {
@@ -3650,31 +3696,75 @@ window._importFindingsData = async function(arr, czArr){
 
   const token = localStorage.getItem('pt_token');
 
-  // Count base64 photos so we can show progress. Large JSON bodies with
-  // embedded photos trigger 413 on Render; upload photos via multipart first.
-  let totalPhotos = 0;
-  let uploadedPhotos = 0;
+  function resolveEscalationId(escName) {
+    if (!escName) return escalationLabelToId['Not assigned'] || null;
+    const trimmed = String(escName).trim();
+    if (escalationLabelToId[trimmed]) return escalationLabelToId[trimmed];
+
+    const ALIASES = {
+      'SOTAICOs': 'SOTAICO',
+      'SOTAICO': 'SOTAICOs',
+      'Client QA': 'Client Super',
+      'QA': 'Client Super',
+      'Client Quality Assurance': 'Client Super',
+      'Client Management': 'Client Senior Management',
+      'Client Senior Mgmt': 'Client Senior Management',
+      'None': 'Not assigned',
+      'Unassigned': 'Not assigned',
+      '— Not assigned —': 'Not assigned',
+    };
+
+    const alias = ALIASES[trimmed];
+    if (alias && escalationLabelToId[alias]) return escalationLabelToId[alias];
+
+    const lower = trimmed.toLowerCase();
+    for (const [key, id] of Object.entries(escalationLabelToId)) {
+      if (key.toLowerCase() === lower) return id;
+    }
+    return escalationLabelToId['Not assigned'] || null;
+  }
+
+  // Collect all unique base64 photos to upload concurrently and avoid redundant transfers
+  const base64Photos = new Set();
   for (const loc of arr) {
     for (const v of (loc.visits || [])) {
       for (const p of (v.photos || [])) {
-        if (typeof p === 'string' && p.startsWith('data:')) totalPhotos++;
+        if (typeof p === 'string' && p.startsWith('data:')) {
+          base64Photos.add(p);
+        }
       }
     }
   }
 
-  async function resolvePhoto(photo) {
-    if (typeof photo !== 'string' || !photo.startsWith('data:')) return photo;
-    const { key } = await uploadPhotoToServer(dataURLtoBlob(photo));
-    uploadedPhotos++;
-    if (totalPhotos > 0 && (uploadedPhotos === totalPhotos || uploadedPhotos % 5 === 0)) {
-      showNotif(`⏳ Uploading photos ${uploadedPhotos}/${totalPhotos}…`, false, 0);
-    }
-    return key;
-  }
+  const photoKeyMap = new Map();
+  const uniquePhotosArray = Array.from(base64Photos);
+  const totalPhotos = uniquePhotosArray.length;
+  let uploadedPhotos = 0;
 
   try {
     if (totalPhotos > 0) {
       showNotif(`⏳ Uploading ${totalPhotos} photo(s)…`, false, 0);
+      const CONCURRENCY = 5;
+      let queueIdx = 0;
+
+      async function uploadWorker() {
+        while (queueIdx < uniquePhotosArray.length) {
+          const curIdx = queueIdx++;
+          const b64 = uniquePhotosArray[curIdx];
+          const { key } = await uploadPhotoToServer(dataURLtoBlob(b64));
+          photoKeyMap.set(b64, key);
+          uploadedPhotos++;
+          if (uploadedPhotos === totalPhotos || uploadedPhotos % 5 === 0) {
+            showNotif(`⏳ Uploading photos ${uploadedPhotos}/${totalPhotos}…`, false, 0);
+          }
+        }
+      }
+
+      const workers = [];
+      for (let i = 0; i < Math.min(CONCURRENCY, uniquePhotosArray.length); i++) {
+        workers.push(uploadWorker());
+      }
+      await Promise.all(workers);
     } else {
       showNotif(`⏳ Importing ${arr.length} finding(s)...`, false, 0);
     }
@@ -3683,17 +3773,22 @@ window._importFindingsData = async function(arr, czArr){
     for (const loc of arr) {
       const visits = [];
       for (const v of (loc.visits || [])) {
-        const photos = [];
-        for (const p of (v.photos || [])) {
-          photos.push(await resolvePhoto(p));
-        }
+        const photos = (v.photos || []).map(p => {
+          if (typeof p === 'string' && p.startsWith('data:')) {
+            return photoKeyMap.get(p) || p;
+          }
+          return p;
+        });
+        const catId = categoryLabelToId[CATEGORY_MAP[v.cat]]
+          || categoryLabelToId[v.cat]
+          || categoryLabelToId['Other'];
         visits.push({
           visitDate: v.date,
-          categoryId: categoryLabelToId[CATEGORY_MAP[v.cat]] || categoryLabelToId['Other'],
+          categoryId: catId,
           label: v.label || '',
           notes: v.notes || '',
-          escalatedToId: escalationLabelToId[v.escalated] || escalationLabelToId['Not assigned'],
-          statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId['1st Offense'],
+          escalatedToId: resolveEscalationId(v.escalated),
+          statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId[v.status] || statusLabelToId['1st Offense'],
           photos
         });
       }
