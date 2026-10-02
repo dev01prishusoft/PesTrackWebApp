@@ -68,6 +68,8 @@ function openPdfSortModal(){
   if(!window._ptFindings || window._ptFindings.length === 0){
     showNotif('⚠️ No findings to export', true, 3000); return;
   }
+  const expEl = document.getElementById('pdf-expanded-recap');
+  if(expEl) expEl.checked = false;
   document.getElementById('m-pdf-sort').style.display = 'flex';
 }
 window.openPdfSortModal = openPdfSortModal;
@@ -117,8 +119,10 @@ function launchPdfWithSort(){
   const sortBy = sel ? sel.value : 'number';
   const thumbEl = document.getElementById('pdf-thumbmap');
   const withThumbMap = !!(thumbEl && thumbEl.checked);
+  const expRecapEl = document.getElementById('pdf-expanded-recap');
+  const expandedRecap = !!(expRecapEl && expRecapEl.checked);
 
-  const opts = {};
+  const opts = { expandedRecap };
   const histOn = document.getElementById('pdf-fullhist');
   if(histOn && histOn.checked){
     const from = (document.getElementById('pdf-hist-from').value || '').trim();
@@ -1020,7 +1024,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     drawHeader(PW, `SITE FINDINGS REPORT — ${CLIENT}`,
       `${opts.onlyLocId ? 'Full history — every visit in full'
          : (opts.histFrom && opts.histTo) ? `Full detail for visits ${opts.histFrom} to ${opts.histTo}`
-         : 'Finding Details (current status in full, history in brief)'}  ·  ${visibleFindings.length} location${visibleFindings.length!==1?'s':''}  ·  ${sortLabel}  ·  Prepared ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`);
+         : (opts.expandedRecap ? 'Finding Details (current status in full, history in brief)' : 'Finding Details (current status in full)')}  ·  ${visibleFindings.length} location${visibleFindings.length!==1?'s':''}  ·  ${sortLabel}  ·  Prepared ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`);
     y = HDR+4;
 
     // ── Which visits print in FULL? ────────────────────────────────
@@ -1043,7 +1047,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
         if(!_raw || !hasArabic(_raw)) return;
         const _key = (_loc.locId||'?') + '#' + _vi;
         if(isFullVisit(_vi, _v)) queueNote(_key, _raw, CW-12, 2.1);
-        else                     queueNote(_key, _raw.replace(/\s+/g,' ').trim(), CW-12, 1.97);
+        else if(opts.expandedRecap) queueNote(_key, _raw.replace(/\s+/g,' ').trim(), CW-12, 1.97);
       });
     }
     await flushNoteQueue();
@@ -1096,7 +1100,28 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
       // Summary line — status/visits/category/coords, all one row, one font
       pdf.setFillColor(245,247,250); pdf.rect(ML, y, CW, 7, 'F');
       pdf.setTextColor(60,70,90);
-      const sumTxt = `${STAT_LABELS[latest.status]||'Open'}  |  ${totalVisits} visit${totalVisits>1?'s':''}  |  ${repeats} repeat${repeats!==1?'s':''}  |  CAT: ${pdfText(catLabel)}  |  Coords: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
+      const sumParts = [
+        STAT_LABELS[latest.status] || 'Open',
+        `${totalVisits} visit${totalVisits > 1 ? 's' : ''}`,
+        `${repeats} repeat${repeats !== 1 ? 's' : ''}`
+      ];
+      if(!opts.expandedRecap){
+        let firstReportedDate = '';
+        if(loc.visits && loc.visits.length > 0){
+          const validDates = loc.visits.map(v => v.date).filter(Boolean).sort();
+          if(validDates.length > 0){
+            firstReportedDate = validDates[0];
+          } else if(loc.visits[loc.visits.length - 1] && loc.visits[loc.visits.length - 1].date){
+            firstReportedDate = loc.visits[loc.visits.length - 1].date;
+          }
+        }
+        if(firstReportedDate){
+          sumParts.push(`First reported on: ${firstReportedDate}`);
+        }
+      }
+      sumParts.push(`CAT: ${pdfText(catLabel)}`);
+      sumParts.push(`Coords: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
+      const sumTxt = sumParts.join('  |  ');
       setFontForText(sumTxt, 6.5, 'normal');
       pdf.text(sumTxt, ML+3, y+4.5);
       y += 9;
@@ -1247,86 +1272,89 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
       // category, who it was assigned to, photo count, and as much of the
       // observation as fits on the line. Photos are deliberately omitted —
       // they are the bulk of the old report's page count and file size.
-      const _compact = [];
-      for(let ci=0; ci<loc.visits.length; ci++){
-        if(!isFullVisit(ci, loc.visits[ci])) _compact.push(ci);
-      }
-      if(_compact.length){
-        const nPrior = _compact.length;
-        ensurePage(10);
-        pdf.setFont('helvetica','bold'); pdf.setFontSize(6); pdf.setTextColor(110,120,140);
-        pdf.text(`Previous occurrences (${nPrior}) — summary only, photos in dashboard`, ML+6, y+3);
-        y += 5;
-        // v6.05.6: the observation now WRAPS onto as many lines as it needs
-        // instead of being truncated, and the recorder's name is not shown in
-        // this report. Arabic notes are handled properly: pure Arabic uses the
-        // embedded Noto font right-aligned, and the handful that mix Arabic
-        // with Latin go through the browser-rendered image path, because jsPDF
-        // mangles mixed bidi text on a single line.
-        const PROWH = 4.6, PNOTEH = 3.2;
-        const BOXX = ML+6, BOXW = CW-6, TXTX = ML+9, NOTEW = CW-6-6;
-        function priorBand(h, rgb){
-          pdf.setFillColor(250,251,253); pdf.rect(BOXX, y, BOXW, h, 'F');
-          pdf.setFillColor(rgb[0],rgb[1],rgb[2]); pdf.rect(BOXX, y, 1.6, h, 'F');
+      // v6.05.8: Included only if expandedRecap option is checked.
+      if(opts.expandedRecap){
+        const _compact = [];
+        for(let ci=0; ci<loc.visits.length; ci++){
+          if(!isFullVisit(ci, loc.visits[ci])) _compact.push(ci);
         }
-        for(const vi of _compact){
-          const pv = loc.visits[vi];
-          const pvRGB = hexToRgb(STAT_COLORS[pv.status]||'#FB923C');
-          const pvCat = pdfText(CAT_LABELS[pv.cat]||pv.cat||'');
-          const nPh = (pv.photos||[]).length;
-          const bits = [pv.date || '—', STAT_LABELS[pv.status]||''];
-          if(pvCat) bits.push(pvCat);
-          if(pv.escalated) bits.push('-> '+pdfText(pv.escalated));
-          if(nPh) bits.push(`${nPh} photo${nPh>1?'s':''}`);
-          const headTxt = bits.filter(Boolean).join('  ·  ');
+        if(_compact.length){
+          const nPrior = _compact.length;
+          ensurePage(10);
+          pdf.setFont('helvetica','bold'); pdf.setFontSize(6); pdf.setTextColor(110,120,140);
+          pdf.text(`Previous occurrences (${nPrior}) — summary only, photos in dashboard`, ML+6, y+3);
+          y += 5;
+          // v6.05.6: the observation now WRAPS onto as many lines as it needs
+          // instead of being truncated, and the recorder's name is not shown in
+          // this report. Arabic notes are handled properly: pure Arabic uses the
+          // embedded Noto font right-aligned, and the handful that mix Arabic
+          // with Latin go through the browser-rendered image path, because jsPDF
+          // mangles mixed bidi text on a single line.
+          const PROWH = 4.6, PNOTEH = 3.2;
+          const BOXX = ML+6, BOXW = CW-6, TXTXT = ML+9, NOTEW = CW-6-6;
+          function priorBand(h, rgb){
+            pdf.setFillColor(250,251,253); pdf.rect(BOXX, y, BOXW, h, 'F');
+            pdf.setFillColor(rgb[0],rgb[1],rgb[2]); pdf.rect(BOXX, y, 1.6, h, 'F');
+          }
+          for(const vi of _compact){
+            const pv = loc.visits[vi];
+            const pvRGB = hexToRgb(STAT_COLORS[pv.status]||'#FB923C');
+            const pvCat = pdfText(CAT_LABELS[pv.cat]||pv.cat||'');
+            const nPh = (pv.photos||[]).length;
+            const bits = [pv.date || '—', STAT_LABELS[pv.status]||''];
+            if(pvCat) bits.push(pvCat);
+            if(pv.escalated) bits.push('-> '+pdfText(pv.escalated));
+            if(nPh) bits.push(`${nPh} photo${nPh>1?'s':''}`);
+            const headTxt = bits.filter(Boolean).join('  ·  ');
 
-          const noteRaw = pdfText(pv.notes||'').replace(/\s+/g,' ').trim();
-          const noteArabic = hasArabic(noteRaw);
-          const noteMixed  = noteArabic && /[A-Za-z]/.test(noteRaw);
+            const noteRaw = pdfText(pv.notes||'').replace(/\s+/g,' ').trim();
+            const noteArabic = hasArabic(noteRaw);
+            const noteMixed  = noteArabic && /[A-Za-z]/.test(noteRaw);
 
-          // Measure first so the header and its note stay on the same page.
-          let noteLines = null, noteImg = null;
-          if(noteRaw){
-            // Any Arabic — mixed or not — is rendered by the browser and
-            // embedded as an image. jsPDF's own Arabic handling does not join
-            // letters reliably, and this is the path already proven by the
-            // latest-visit notes. Rendered at 1x and at the history text size
-            // so it stays light: these are short notes.
-            if(noteArabic) noteImg = _noteImages[(loc.locId||'?')+'#'+vi]
-                        || await renderNotesImage(noteRaw, NOTEW, {fontMM:1.97, scale:1, jpeg:true});
-            if(!noteImg){
+            // Measure first so the header and its note stay on the same page.
+            let noteLines = null, noteImg = null;
+            if(noteRaw){
+              // Any Arabic — mixed or not — is rendered by the browser and
+              // embedded as an image. jsPDF's own Arabic handling does not join
+              // letters reliably, and this is the path already proven by the
+              // latest-visit notes. Rendered at 1x and at the history text size
+              // so it stays light: these are short notes.
+              if(noteArabic) noteImg = _noteImages[(loc.locId||'?')+'#'+vi]
+                          || await renderNotesImage(noteRaw, NOTEW, {fontMM:1.97, scale:1, jpeg:true});
+              if(!noteImg){
+                setFontForText(noteRaw, 5.6, 'normal');
+                noteLines = pdf.splitTextToSize(noteRaw, NOTEW);
+              }
+            }
+            const noteH = noteImg ? noteImg.hMM + 1
+                        : noteLines ? noteLines.length*PNOTEH + 0.8 : 0;
+            ensurePage(Math.min(PROWH + noteH + 1.5, 200));
+
+            priorBand(PROWH, pvRGB);
+            pdf.setFont('helvetica','bold'); pdf.setFontSize(5.6); pdf.setTextColor(60,70,90);
+            pdf.text(headTxt, TXTXT, y+3.1);
+            y += PROWH;
+
+            if(noteImg){
+              priorBand(noteImg.hMM + 1, pvRGB);
+              try{ pdf.addImage(noteImg.data, noteImg.fmt||'PNG', TXTXT, y+0.4, noteImg.wMM, noteImg.hMM); }catch(e){}
+              y += noteImg.hMM + 1;
+            } else if(noteLines){
               setFontForText(noteRaw, 5.6, 'normal');
-              noteLines = pdf.splitTextToSize(noteRaw, NOTEW);
+              pdf.setTextColor(120,130,148);
+              for(const ln of noteLines){
+                ensurePage(PNOTEH + 0.5);
+                priorBand(PNOTEH, pvRGB);
+                if(noteArabic) pdf.text(ln, BOXX + BOXW - 3, y+2.3, {align:'right'});
+                else           pdf.text(ln, TXTXT, y+2.3);
+                y += PNOTEH;
+              }
+              y += 0.8;
             }
+            y += 0.6;
           }
-          const noteH = noteImg ? noteImg.hMM + 1
-                      : noteLines ? noteLines.length*PNOTEH + 0.8 : 0;
-          ensurePage(Math.min(PROWH + noteH + 1.5, 200));
-
-          priorBand(PROWH, pvRGB);
-          pdf.setFont('helvetica','bold'); pdf.setFontSize(5.6); pdf.setTextColor(60,70,90);
-          pdf.text(headTxt, TXTX, y+3.1);
-          y += PROWH;
-
-          if(noteImg){
-            priorBand(noteImg.hMM + 1, pvRGB);
-            try{ pdf.addImage(noteImg.data, noteImg.fmt||'PNG', TXTX, y+0.4, noteImg.wMM, noteImg.hMM); }catch(e){}
-            y += noteImg.hMM + 1;
-          } else if(noteLines){
-            setFontForText(noteRaw, 5.6, 'normal');
-            pdf.setTextColor(120,130,148);
-            for(const ln of noteLines){
-              ensurePage(PNOTEH + 0.5);
-              priorBand(PNOTEH, pvRGB);
-              if(noteArabic) pdf.text(ln, BOXX + BOXW - 3, y+2.3, {align:'right'});
-              else           pdf.text(ln, TXTX, y+2.3);
-              y += PNOTEH;
-            }
-            y += 0.8;
-          }
-          y += 0.6;
+          y += 1.5;
         }
-        y += 1.5;
       }
       y += 5;
     }
