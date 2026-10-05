@@ -824,6 +824,33 @@ async function importBulk(req, res, next) {
       throw uploadErr;
     }
 
+    // Keep each visit's original creator / engineer from the backup when that
+    // user exists here; otherwise fall back to the importing user.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const candidateUserIds = new Set();
+    for (const f of findings) {
+      for (const v of (Array.isArray(f.visits) ? f.visits : [])) {
+        if (UUID_RE.test(v.createdById || '')) candidateUserIds.add(v.createdById);
+        if (UUID_RE.test(v.engineerId || '')) candidateUserIds.add(v.engineerId);
+      }
+    }
+    const existingUserIds = new Set();
+    if (candidateUserIds.size) {
+      const { rows: userRows } = await query(
+        'SELECT id FROM users WHERE id = ANY($1::uuid[])',
+        [[...candidateUserIds]]
+      );
+      userRows.forEach((u) => existingUserIds.add(String(u.id).toLowerCase()));
+    }
+    const resolveUser = (id, fallback) =>
+      (typeof id === 'string' && existingUserIds.has(id.toLowerCase()) ? id : fallback);
+    for (const f of findings) {
+      for (const v of (Array.isArray(f.visits) ? f.visits : [])) {
+        v.createdById = resolveUser(v.createdById, req.user.id);
+        v.engineerId = resolveUser(v.engineerId, req.body.engineerId || req.user.id);
+      }
+    }
+
     // Step 2: Execute clear and insert operations in a transaction
     const { oldPhotoKeys, oldFindingsSummary } = await withTransaction(async (client) => {
       // 2a. Fetch existing locations for the site
@@ -932,8 +959,8 @@ async function importBulk(req, res, next) {
                 v.notes || null,
                 v.escalatedToId || null,
                 v.statusId,
-                req.user.id,
-                req.body.engineerId || req.user.id,
+                v.createdById,
+                v.engineerId,
               ]
             );
             const visitId = visitResult[0].id;
@@ -990,6 +1017,8 @@ async function importBulk(req, res, next) {
             label: v.label || '',
             notes: v.notes || '',
             escalated: v.escalatedToId ? (escalationMap.get(v.escalatedToId) || v.escalatedToId) : 'Not assigned',
+            createdById: v.createdById,
+            engineerId: v.engineerId,
             photos: v.photos || []
           }))
         : []

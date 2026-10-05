@@ -62,4 +62,4 @@ npm test           # jest — roleCheck / site-access unit tests
 
 ## Still to build (later slices)
 Locations/visits/zones/parcels CRUD, photo upload to S3, findings audit,
-JSON import→DB (admin), and the frontend dashboard integration. 
+JSON import→DB (admin), and the frontend dashboard integration.

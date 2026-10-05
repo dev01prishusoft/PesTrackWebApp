@@ -439,6 +439,56 @@ describe('addVisit audit logs integration', () => {
     expect(auditValues.importedData[0].visits[0].photos).toEqual(['photos/mock-new.jpg']);
   });
 
+  test('importBulk keeps the backup creator/engineer when the user exists, else uses the importing user', async () => {
+    const KNOWN = 'cdb0e42f-feff-4f83-9fd4-369822c2fa54';
+    const UNKNOWN = '11111111-2222-3333-4444-555555555555';
+
+    const transactionQueryMock = jest.fn(async (sql) => {
+      if (sql.includes('INSERT INTO locations')) return { rows: [{ id: 'new-location-uuid' }] };
+      if (sql.includes('INSERT INTO visits')) return { rows: [{ id: 'new-visit-uuid' }] };
+      return { rows: [] };
+    });
+    db.withTransaction.mockImplementationOnce(async (fn) => fn({ query: transactionQueryMock }));
+    db.query.mockImplementation(async (sql, params) => {
+      if (sql.includes('FROM users WHERE id = ANY')) {
+        return { rows: params[0].filter((id) => id === KNOWN).map((id) => ({ id })) };
+      }
+      if (sql.includes('INSERT INTO audit_logs')) return { rowCount: 1 };
+      return { rows: [] };
+    });
+
+    const baseVisit = { visitDate: '2026-09-30', categoryId: 'cat-uuid-123', statusId: 'status-uuid-123', photos: [] };
+    const req = {
+      body: {
+        siteId: 'site-uuid-123',
+        findings: [{
+          lat: 27.1, lng: 33.1, ref_num: '001',
+          visits: [
+            { ...baseVisit, createdById: KNOWN, engineerId: KNOWN },
+            { ...baseVisit, createdById: UNKNOWN, engineerId: 'not-a-uuid' },
+            { ...baseVisit },
+          ],
+        }],
+      },
+      user: { id: 'admin-uuid' },
+      ip: '127.0.0.1',
+      headers: { 'user-agent': 'Jest Test' },
+    };
+    const res = { status() { return this; }, json(b) { this.body = b; return this; } };
+    const next = jest.fn();
+
+    await importBulk(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    const visitInserts = transactionQueryMock.mock.calls.filter((c) => c[0].includes('INSERT INTO visits'));
+    // params[7] = created_by, params[8] = engineer_id
+    expect(visitInserts.map((c) => [c[1][7], c[1][8]])).toEqual([
+      [KNOWN, KNOWN],
+      ['admin-uuid', 'admin-uuid'],
+      ['admin-uuid', 'admin-uuid'],
+    ]);
+  });
+
   test('deleteVisit resolves references, includes ref_num and photos, and logs DELETE action', async () => {
     db.query.mockImplementation(async (sql, params) => {
       if (sql.includes('SELECT * FROM locations')) {

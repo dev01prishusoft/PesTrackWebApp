@@ -159,7 +159,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
                        font-weight: 400; color: #1C2333; text-align: left; }
 .mod label span span { color: #94A3B8; }   /* the grey explanatory half */
 
-/* Desktop-only single-finding print button in popup (A5) */
+/* Single-finding print button in popup (A5) */
 .fi-print-btn {
   display: block;
   width: 100%;
@@ -179,11 +179,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   background: #e2e8f0;
   color: #1e293b;
   border-color: #94a3b8;
-}
-@media (max-width: 1024px) {
-  .fi-print-btn {
-    display: none !important;
-  }
 }
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2846,7 +2841,7 @@ function buildPopup(loc){
   ` : '';
 
   const printButton = canPrintFinding ? `
-    <button class="fi-print-btn" onclick="printFindingHistory('${loc.locId}')" title="Print full history PDF for this finding (Desktop only)">🖨 Print Finding History</button>
+    <button class="fi-print-btn" onclick="printFindingHistory('${loc.locId}')" title="Print full history PDF for this finding">🖨 Print Finding History</button>
   ` : '';
 
   return `<div class="fi-popup">
@@ -2975,7 +2970,7 @@ function mapApiFinding(f){
         status: legacyStatus,
         label: v.label || '',
         notes: v.notes || '',
-        escalated: (escalationIdToLabel[v.escalatedToId] === 'SOTAICOs') ? 'SOTAICO' : (escalationIdToLabel[v.escalatedToId] || ''),
+        escalated: escalationIdToLabel[v.escalatedToId] || '',
         createdByName: v.createdByName || 'Unknown',
         createdById: v.createdById || null,
         engineerName: v.engineerName || 'Unknown',
@@ -3763,6 +3758,10 @@ window._importFindingsData = async function(arr, czArr){
           notes: v.notes || '',
           escalatedToId: resolveEscalationId(v.escalated),
           statusId: statusLabelToId[STATUS_MAP[v.status]] || statusLabelToId[v.status] || statusLabelToId['1st Offense'],
+          // Original author / engineer from the backup; the server keeps them
+          // only if those users exist, otherwise uses the importing user.
+          createdById: v.createdById || null,
+          engineerId: v.engineerId || null,
           photos
         });
       }
@@ -4090,7 +4089,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     const STAT_LABELS = {open:'1st Offense', repeat:'Repeat', resolved:'Resolved'};
     // Built from the dashboard's CATS so PDF labels always match exactly
     const CAT_LABELS = Object.fromEntries((window._CATS||[]).map(c=>[c.id, c.label]));
-    const CLIENT = (window._CLIENT_CONFIG&&window._CLIENT_CONFIG.name)||'El Gouna';
+    const CLIENT = (window._CLIENT_CONFIG&&window._CLIENT_CONFIG.name)||'PesTrack';
 
     function hexToRgb(h){
       h=h.replace('#','');
@@ -4105,7 +4104,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     // ── Detect if text contains Arabic characters ──
     function hasArabic(text){
       if(!text) return false;
-      return /[\u0600-\u06FF\u0750-\u077F]/.test(text);
+      return /[؀-ۿݐ-ݿ]/.test(text);
     }
 
     // ── Load & register an Arabic-capable font (Noto Naskh Arabic) ──
@@ -4323,6 +4322,10 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     const origCenter = map.getCenter();
     const origZoom   = map.getZoom();
 
+    // An open finding popup (e.g. the one whose "Print Finding History" button
+    // started this export) would otherwise be captured onto the map page.
+    map.closePopup();
+
     // Temporarily resize map to A4 portrait proportions
     mapEl.style.height = targetPxH + 'px';
     map.invalidateSize();
@@ -4386,6 +4389,14 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     const _p0 = map.latLngToContainerPoint([_sc.lat, _sc.lng]);
     const _p1 = map.latLngToContainerPoint([_sc.lat, _sc.lng + _dLng]);
     const KM_MM = Math.abs(_p1.x - _p0.x) / mapPxW * drawW;  // mm per 1 km
+    // Scale bar length: largest round distance that stays right of the
+    // centred page number. At high zoom (e.g. a single-finding report) 1 km
+    // would run under the page number and the legend.
+    const SCALE_MAX_MM = 75;
+    const SCALE_M = [1000, 500, 200, 100, 50, 20, 10]
+      .find(m => KM_MM * m / 1000 <= SCALE_MAX_MM) || 10;
+    const SCALE_MM = KM_MM * SCALE_M / 1000;
+    const SCALE_LBL = SCALE_M >= 1000 ? `${SCALE_M/1000} km` : `${SCALE_M} m`;
 
     // Restore map to original size AND view AFTER coordinate capture
     fiMarkers.forEach(el=>el.style.visibility='');
@@ -4449,26 +4460,26 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     }
 
     function drawScaleBar(){
-      // 1 km scale bar — bottom-right corner, away from the legend
-      if(!isFinite(KM_MM) || KM_MM <= 0) return;
+      // Scale bar (SCALE_LBL long) — bottom-right corner, away from the legend
+      if(!isFinite(SCALE_MM) || SCALE_MM <= 0) return;
       const bx2 = LW - 6;            // right end
-      const bx1 = bx2 - KM_MM;       // left end (1 km away)
+      const bx1 = bx2 - SCALE_MM;    // left end
       const by  = LH - 7;            // bar baseline
       // white plaque behind for legibility
       pdf.setFillColor(255,255,255);
       pdf.setDrawColor(180,188,200); pdf.setLineWidth(0.2);
-      pdf.roundedRect(bx1-3, by-5, KM_MM+6, 8.5, 1, 1, 'FD');
+      pdf.roundedRect(bx1-3, by-5, SCALE_MM+6, 8.5, 1, 1, 'FD');
       // bar with end ticks
       pdf.setDrawColor(28,35,51); pdf.setLineWidth(0.5);
       pdf.line(bx1, by, bx2, by);
       pdf.line(bx1, by-1.6, bx1, by+1.6);
       pdf.line(bx2, by-1.6, bx2, by+1.6);
-      // halfway tick (500 m)
+      // halfway tick
       pdf.setLineWidth(0.3);
       pdf.line((bx1+bx2)/2, by-1, (bx1+bx2)/2, by+1);
       pdf.setFontSize(5.5); pdf.setFont('helvetica','bold');
       pdf.setTextColor(28,35,51);
-      pdf.text('1 km', (bx1+bx2)/2, by-2, {align:'center'});
+      pdf.text(SCALE_LBL, (bx1+bx2)/2, by-2, {align:'center'});
     }
 
     function drawMapLegend(){
@@ -4509,8 +4520,12 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
         lx += ts*2 + 1.5 + tw + (idx < items.length-1 ? LEG_INNER_PAD : 0);
       });
     }
+    // Single-finding report: page 1 shows that finding with one photo
+    // thumbnail from its latest visit instead of a plain numbered marker.
+    const SINGLE_THUMB = !!opts.onlyLocId;
+
     // ── Numbered status markers on the map (page 1) ──
-    if(!PDF_HIDE_FINDINGS && markers.length){
+    if(!PDF_HIDE_FINDINGS && markers.length && !SINGLE_THUMB){
       const CR2  = Math.max(1.6, CR * 0.6);    // small circle radius, mm
       const DOT2 = Math.max(0.6, dotR * 0.6);  // tiny dot at exact GPS point
       const RAY2 = CR2 * 2.6;                  // short ray length
@@ -4529,7 +4544,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
           if(cx-CR2 < 1 || cx+CR2 > LW-1 || cy-CR2 < HDR+1 || cy+CR2 > LH-2) continue;
           let score = 0;
           if(cx-CR2 < 120 && cy+CR2 > LH-14) score += 4;   // legend keep-out
-          if(cx+CR2 > LW-12-KM_MM && cy+CR2 > LH-13) score += 4; // scale-bar keep-out
+          if(cx+CR2 > LW-12-SCALE_MM && cy+CR2 > LH-13) score += 4; // scale-bar keep-out
           placed2.forEach(p=>{
             if(Math.hypot(cx-p.x, cy-p.y) < CR2*2 + 0.6) score += 3;
           });
@@ -4585,14 +4600,17 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
     // unreadable collage — but on smaller sites, or a filtered selection, it is
     // the most informative page in the report. Off by default; the clean
     // numbered map above stays page 1 either way.
-    if(withThumbMap && !PDF_HIDE_FINDINGS && markers.length){
+    // Single-finding report draws its thumbnail straight onto page 1.
+    if((withThumbMap || SINGLE_THUMB) && !PDF_HIDE_FINDINGS && markers.length){
       showNotif('⏳ Building photo thumbnail map…', false, 0);
-      pdf.addPage([LW, LH], 'portrait');
-      drawHeader(LW, `SITE FINDINGS REPORT — ${CLIENT}`,
-        `Photo map  ·  ${visibleFindings.length} location${visibleFindings.length!==1?'s':''}  ·  ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`);
-      pdf.addImage(mapImg,'JPEG', 0, HDR, LW, mapAreaH);
+      if(!SINGLE_THUMB){
+        pdf.addPage([LW, LH], 'portrait');
+        drawHeader(LW, `SITE FINDINGS REPORT — ${CLIENT}`,
+          `Photo map  ·  ${visibleFindings.length} location${visibleFindings.length!==1?'s':''}  ·  ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`);
+        pdf.addImage(mapImg,'JPEG', 0, HDR, LW, mapAreaH);
+      }
 
-      if(czPoints.length && !PDF_HIDE_CONSTR && constrMapImgData){
+      if(!SINGLE_THUMB && czPoints.length && !PDF_HIDE_CONSTR && constrMapImgData){
         const czIconH3 = Math.max(10, TS*3.5);
         const czIconW3 = czIconH3 * constrMapAspect;
         czPoints.forEach(({cx, cy})=>{
@@ -4661,9 +4679,17 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
           img.src = b64;
         });
       }
+      // Single-finding report: newest visit that has a photo, not the oldest.
+      function _latestPhotoB64(loc){
+        for(let i=0; i<loc.visits.length; i++){
+          const ph = loc.visits[i] && loc.visits[i].photos;
+          if(ph && ph.length) return ph[0];
+        }
+        return null;
+      }
       if(!PDF_HIDE_FINDINGS){
         for(const m of markers){
-          const b64 = _firstPhotoB64(m.loc);
+          const b64 = SINGLE_THUMB ? _latestPhotoB64(m.loc) : _firstPhotoB64(m.loc);
           if(b64){
             const t = await _makeThumb(b64);
             if(t) thumbs[m.loc.locId] = t;
@@ -4676,7 +4702,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
       //    already-placed thumbnails and other markers.
       const placedBoxes = [];
       const legendKeepout = {x:0, y:LH-14, w:120, h:14};
-      const scaleKeepout  = {x:LW-12-KM_MM, y:LH-13, w:KM_MM+12, h:13};
+      const scaleKeepout  = {x:LW-12-SCALE_MM, y:LH-13, w:SCALE_MM+12, h:13};
       function _boxesOverlap(a, b, gap){
         return !(a.x+a.w+gap < b.x || b.x+b.w+gap < a.x ||
                  a.y+a.h+gap < b.y || b.y+b.h+gap < a.y);
@@ -4789,7 +4815,7 @@ async function exportFindingsPDF(sortBy='number', recapOnly=false, withThumbMap=
         });
       }
 
-      drawMapLegend();
+      if(!SINGLE_THUMB) drawMapLegend();   // page 1 already has its legend
     }
 
     } // end map pages
